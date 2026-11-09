@@ -1,0 +1,2604 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stemify.io — Meta HT-Demucs v4 Yapay Zeka Vokal Ayırıcı Stüdyo</title>
+  <meta name="description" content="Stemify.io ile Meta HT-Demucs v4 Derin Öğrenme Yapay Zeka modeliyle şarkılardan vokal ve müziği stüdyo kalitesinde ayırın." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ONNX Runtime Web, arka plan Web Worker içinde yüklenir (ana sayfa hiç donmaz) -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://huggingface.co" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'shimmer': 'shimmer 2s linear infinite',
+          },
+          keyframes: {
+            shimmer: {
+              '0%': { transform: 'translateX(-100%)' },
+              '100%': { transform: 'translateX(100%)' }
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #06080e;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+    .glass-card {
+      background: rgba(13, 18, 30, 0.82);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-subcard {
+      background: rgba(20, 27, 45, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .drop-active {
+      border-color: #8b5cf6 !important;
+      background: rgba(139, 92, 246, 0.14) !important;
+      transform: scale(1.01);
+    }
+    @keyframes eqBar {
+      0%, 100% { transform: scaleY(0.22); }
+      50% { transform: scaleY(1); }
+    }
+    .eq-bar {
+      animation: eqBar 1s ease-in-out infinite;
+      transform-origin: bottom;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.14);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 16px;
+      width: 16px;
+      border-radius: 9999px;
+      background: #a78bfa;
+      margin-top: -5px;
+      box-shadow: 0 0 10px rgba(167, 139, 250, 0.85);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-violet-500 selection:text-white">
+
+  <!-- Ambient Arka Plan Işıkları -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+    <div class="absolute -top-32 -left-32 w-96 h-96 bg-violet-600/20 rounded-full blur-[135px] animate-pulse-slow"></div>
+    <div class="absolute top-1/3 -right-32 w-96 h-96 bg-cyan-500/15 rounded-full blur-[135px] animate-pulse-slow"></div>
+    <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-fuchsia-600/15 rounded-full blur-[140px]"></div>
+    <div class="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:28px_28px]"></div>
+  </div>
+
+  <!-- Üst Navigasyon Barı -->
+  <header class="sticky top-0 z-40 border-b border-white/5 bg-[#06080e]/85 backdrop-blur-xl">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-tr from-violet-600 via-fuchsia-500 to-cyan-400 p-[1px] shadow-lg shadow-violet-500/25">
+          <div class="w-full h-full bg-[#0b0f1a] rounded-[11px] flex items-center justify-center">
+            <svg class="w-5 h-5 sm:w-6 sm:h-6 text-violet-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-lg sm:text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-violet-300 bg-clip-text text-transparent">Stemify.io</span>
+            <span class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">PRO AI v4.0</span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Meta HT-Demucs v4 Neural ONNX Stüdyo Motoru</p>
+        </div>
+      </a>
+
+      <!-- Masaüstü Menü -->
+      <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+        <a href="#studyo" class="hover:text-white transition-colors">Stüdyo</a>
+        <a href="#teknoloji" class="hover:text-white transition-colors">AI Teknolojisi</a>
+        <a href="#nasil-calisir" class="hover:text-white transition-colors">Nasıl Çalışır?</a>
+      </nav>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <div id="aiCacheStatusBadge" class="hidden sm:flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300">
+          <span id="aiCacheDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span id="aiCacheText">AI Model: Bulutta Hazır</span>
+        </div>
+        <button id="demoTrackBtnTop" type="button" class="text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span>Demo Şarkı Yükle</span>
+        </button>
+        <button id="mobileMenuBtn" type="button" aria-label="Menüyü Aç" class="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobil Açılır Menü -->
+    <div id="mobileMenu" class="hidden md:hidden border-t border-white/5 bg-[#0b0f1a]/95 px-4 py-4 space-y-3">
+      <a href="#studyo" class="block py-2 text-sm font-medium text-slate-200 hover:text-violet-400">Stüdyo Alanı</a>
+      <a href="#teknoloji" class="block py-2 text-sm font-medium text-slate-200 hover:text-violet-400">AI Teknolojisi</a>
+      <a href="#nasil-calisir" class="block py-2 text-sm font-medium text-slate-200 hover:text-violet-400">Nasıl Çalışır?</a>
+    </div>
+  </header>
+
+  <!-- Ana İçerik -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+
+    <!-- Hero Başlık Bölümü -->
+    <section class="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-300 text-xs font-medium mb-4">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span>Meta HT-Demucs v4 Derin Öğrenme Sinir Ağı (4-Stem ONNX)</span>
+      </div>
+      <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight mb-4">
+        Stüdyo Kalitesinde <span class="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent">Profesyonel Vokal</span> ve Müzik Ayırıcı
+      </h1>
+      <p class="text-sm sm:text-base lg:text-lg text-slate-400 leading-relaxed max-w-2xl mx-auto">
+        <strong class="text-slate-200 font-semibold">Meta HT-Demucs v4 Yapay Zeka Sinir Ağı</strong> ile şarkılardaki vokali, davulu, bası ve enstrümanları birbirinden tamamen bağımsız kanallara kristal netliğinde ayırın.
+      </p>
+    </section>
+
+    <!-- Ana Uygulama / Stüdyo Kartı -->
+    <section id="studyo" class="glass-card rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl shadow-black/70 relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400"></div>
+
+      <!-- Gizli Dosya Input -->
+      <input id="audioFileInput" type="file" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac" class="hidden" />
+
+      <!-- 1. AŞAMA: SÜRÜKLE-BIRAK DOSYA YÜKLEME ALANI -->
+      <div id="uploadStep" class="transition-all duration-300">
+        <div
+          id="dropZone"
+          class="border-2 border-dashed border-slate-700/80 hover:border-violet-500/70 rounded-2xl p-6 sm:p-12 text-center transition-all duration-200 cursor-pointer bg-slate-900/40 hover:bg-slate-900/70 group"
+        >
+          <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-violet-600/20 to-cyan-500/20 border border-violet-500/30 flex items-center justify-center mx-auto mb-5 group-hover:scale-105 transition-transform shadow-lg shadow-violet-500/10">
+            <svg class="w-8 h-8 sm:w-10 sm:h-10 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+
+          <h2 class="text-lg sm:text-2xl font-bold text-white mb-2">
+            Ses dosyanızı buraya sürükleyip bırakın
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-400 mb-6 max-w-lg mx-auto">
+            MP3, WAV, FLAC, M4A veya OGG formatındaki şarkılarınızı yükleyin; 44.1 kHz / 24-Bit stüdyo kalitesinde Vokal ve Enstrümantal kanallarına ayırın.
+          </p>
+
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              id="selectFileBtn"
+              type="button"
+              class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-semibold text-sm sm:text-base text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 shadow-lg shadow-violet-600/30 transition-all active:scale-95"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>Dosya Seç</span>
+            </button>
+
+            <button
+              id="loadDemoBtn"
+              type="button"
+              class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-sm sm:text-base text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 transition-all"
+            >
+              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Stüdyo Demo Parçası ile Dene</span>
+            </button>
+          </div>
+
+          <div class="mt-6 pt-5 border-t border-white/5 flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-[11px] sm:text-xs text-slate-400 font-mono">
+            <span class="px-2.5 py-1 rounded-md bg-white/5">MP3</span>
+            <span class="px-2.5 py-1 rounded-md bg-white/5">WAV (16/24-Bit)</span>
+            <span class="px-2.5 py-1 rounded-md bg-white/5">FLAC</span>
+            <span class="px-2.5 py-1 rounded-md bg-white/5">M4A / AAC</span>
+            <span class="px-2.5 py-1 rounded-md bg-white/5">OGG</span>
+            <span class="text-emerald-400">• 44.1 kHz Kayıpsız İşleme</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. AŞAMA: DOSYA SEÇİLDİĞİNDE GÖRÜNEN DOSYA ADI, BOYUTU VE PROFESYONEL MOTOR AYARLARI -->
+      <div id="fileSelectedStep" class="hidden space-y-6">
+        <div class="glass-subcard rounded-2xl p-4 sm:p-6">
+          <!-- Dosya Özeti -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
+            <div class="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center shrink-0">
+                <svg class="w-6 h-6 sm:w-7 sm:h-7 text-violet-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Analiz Edildi</span>
+                  <span id="fileFormatBadge" class="text-xs font-mono uppercase px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">MP3</span>
+                </div>
+                <h3 id="selectedFileName" class="text-base sm:text-lg font-bold text-white truncate mt-1" title="">
+                  ornek_sarki.mp3
+                </h3>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-400 mt-1">
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="text-slate-500">Boyut:</span>
+                    <strong id="selectedFileSize" class="text-slate-200 font-mono">0.00 MB</strong>
+                  </span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="text-slate-500">Süre:</span>
+                    <strong id="selectedFileDuration" class="text-slate-200 font-mono">--:--</strong>
+                  </span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="text-slate-500">Örnekleme:</span>
+                    <strong id="selectedFileSampleRate" class="text-slate-200 font-mono">44.1 kHz Stereo</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <button
+                id="changeFileBtn"
+                type="button"
+                class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+              >
+                Dosyayı Değiştir
+              </button>
+            </div>
+          </div>
+
+          <!-- Aktif Yapay Zeka Motoru ve Çıktı Kalitesi -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            <div class="md:col-span-2 flex items-start gap-3.5 p-4 rounded-xl border-2 border-fuchsia-500 bg-fuchsia-500/10">
+              <div class="w-3 h-3 rounded-full bg-fuchsia-400 mt-1.5 shrink-0 shadow-[0_0_10px_#e879f9]"></div>
+              <div class="text-xs sm:text-sm">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-white">Meta HT-Demucs v4 Neural AI</span>
+                  <span id="demucsBadgeText" class="text-[10px] font-mono px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-400/30">Ultra Kalite • 4-Stem ONNX</span>
+                </div>
+                <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+                  Meta'nın gerçek Derin Öğrenme modeli (<code class="text-fuchsia-300">htdemucs</code>). Vokali, davulu, bası ve enstrümanları tamamen bağımsız sinir ağıyla ayırır. <span id="demucsCacheHint" class="text-amber-300">(İlk kullanımda ~172 MB AI modeli indirilir ve tarayıcıya kaydedilir)</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-col justify-center p-4 rounded-xl bg-slate-900/70 border border-white/10">
+              <label for="wavBitDepthSelect" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                Çıktı Ses Kalitesi (Mastering)
+              </label>
+              <select
+                id="wavBitDepthSelect"
+                class="w-full rounded-xl bg-slate-950 border border-white/10 px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-fuchsia-500"
+              >
+                <option value="24">24-Bit / 44.1 kHz Studio PCM WAV (Kayıpsız)</option>
+                <option value="16">16-Bit / 44.1 kHz CD Kalitesi WAV (TPDF Dither)</option>
+              </select>
+
+              <label for="speedProfileSelect" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 mt-4">
+                İşlem Profili
+              </label>
+              <select
+                id="speedProfileSelect"
+                class="w-full rounded-xl bg-slate-950 border border-white/10 px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-fuchsia-500"
+              >
+                <option value="turbo">⚡ Turbo — Aynı AI Modeli, Akıllı Örtüşme (Önerilen)</option>
+                <option value="max">🎯 Maksimum Hassasiyet — Stüdyo Referans Örtüşme</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Cihaz Hızlandırma Durumu -->
+          <div class="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-mono">
+            <span class="text-slate-500">Cihaz Hızlandırma:</span>
+            <span id="capGpu" class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">WebGPU: kontrol ediliyor...</span>
+            <span id="capCpu" class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">CPU: --</span>
+            <span id="capIso" class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Çoklu Çekirdek: --</span>
+            <span id="capEngine" class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">AI Motoru: Beklemede</span>
+          </div>
+        </div>
+
+        <!-- İşlemi Başlat Butonu -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p class="text-xs text-slate-400">
+            ✨ <strong class="text-slate-200">Meta HT-Demucs v4 Neural AI:</strong> Vokalleri, davulu, bası ve müziği 4 ayrı kanalda kayıpsız ayrıştırır.
+          </p>
+          <button
+            id="startProcessBtn"
+            type="button"
+            class="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-bold text-sm sm:text-base text-white bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-500 hover:opacity-95 shadow-xl shadow-violet-600/30 transition-all active:scale-95"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>Vokal ve Müziği Ayır</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. AŞAMA: İLERLEME ÇUBUĞU (PROGRESS BAR) VE YÜZDELİK SAYAÇ -->
+      <div id="processingStep" class="hidden py-6 sm:py-10">
+        <div class="max-w-2xl mx-auto text-center">
+          <!-- Canlı Equalizer Animasyonu -->
+          <div class="h-14 flex items-end justify-center gap-1.5 mb-6">
+            <span class="w-2 h-12 rounded-full bg-violet-500 eq-bar" style="animation-delay: 0s;"></span>
+            <span class="w-2 h-10 rounded-full bg-fuchsia-500 eq-bar" style="animation-delay: 0.15s;"></span>
+            <span class="w-2 h-14 rounded-full bg-cyan-400 eq-bar" style="animation-delay: 0.3s;"></span>
+            <span class="w-2 h-9 rounded-full bg-violet-400 eq-bar" style="animation-delay: 0.45s;"></span>
+            <span class="w-2 h-13 rounded-full bg-fuchsia-400 eq-bar" style="animation-delay: 0.2s;"></span>
+            <span class="w-2 h-11 rounded-full bg-cyan-300 eq-bar" style="animation-delay: 0.35s;"></span>
+            <span class="w-2 h-8 rounded-full bg-violet-500 eq-bar" style="animation-delay: 0.1s;"></span>
+          </div>
+
+          <div class="flex items-center justify-between mb-3 px-1 gap-4">
+            <div class="text-left min-w-0">
+              <span id="processStageTitle" class="text-sm sm:text-base font-bold text-white block truncate">
+                Meta HT-Demucs v4 AI başlatılıyor...
+              </span>
+              <span id="processFileNameSub" class="text-xs text-slate-400 font-mono truncate block">
+                ornek_sarki.mp3
+              </span>
+            </div>
+            <div class="text-right shrink-0">
+              <span id="progressPercentage" class="text-2xl sm:text-4xl font-extrabold font-mono bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+                0%
+              </span>
+            </div>
+          </div>
+
+          <!-- Progress Bar Kutusu -->
+          <div class="w-full h-4 sm:h-5 bg-slate-900/95 rounded-full overflow-hidden border border-white/10 p-0.5 shadow-inner">
+            <div
+              id="progressBarFill"
+              class="h-full rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 transition-all duration-150 relative overflow-hidden"
+              style="width: 0%"
+            >
+              <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+            </div>
+          </div>
+
+          <p id="processDetailLog" class="text-xs font-mono text-slate-400 mt-3">
+            Hazırlanıyor...
+          </p>
+
+          <!-- Motor Bilgisi, Geçen ve Kalan Süre -->
+          <div class="flex flex-wrap items-center justify-center gap-2 mt-3 text-[11px] font-mono">
+            <span id="engineInfoBadge" class="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">Motor: hazırlanıyor...</span>
+            <span id="elapsedBadge" class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Geçen: 00:00</span>
+            <span id="etaBadge" class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Kalan süre: hesaplanıyor...</span>
+          </div>
+
+          <!-- İşlem Alt Adımları -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6 text-left">
+            <div id="stepBadge1" class="p-3 rounded-xl border border-white/10 bg-white/5 transition-colors">
+              <p class="text-[11px] font-mono text-slate-400">01 / PCM & MODEL</p>
+              <p class="text-xs font-semibold text-white mt-0.5">HT-Demucs Hazırlık</p>
+            </div>
+            <div id="stepBadge2" class="p-3 rounded-xl border border-white/10 bg-white/5 transition-colors">
+              <p class="text-[11px] font-mono text-slate-400">02 / SİNİR AĞI</p>
+              <p class="text-xs font-semibold text-white mt-0.5">ONNX 4-Stem AI</p>
+            </div>
+            <div id="stepBadge3" class="p-3 rounded-xl border border-white/10 bg-white/5 transition-colors">
+              <p class="text-[11px] font-mono text-slate-400">03 / REKONSTRÜKSİYON</p>
+              <p class="text-xs font-semibold text-white mt-0.5">Hibrit Kanal Sentezi</p>
+            </div>
+            <div id="stepBadge4" class="p-3 rounded-xl border border-white/10 bg-white/5 transition-colors">
+              <p class="text-[11px] font-mono text-slate-400">04 / MASTERING</p>
+              <p class="text-xs font-semibold text-white mt-0.5">24-Bit WAV Çıktı</p>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-slate-500 mt-5">
+            İşlem arka planda (Web Worker) çalışır; sayfa donmaz. Şarkınız hiçbir sunucuya gönderilmez.
+          </p>
+          <button
+            id="cancelProcessBtn"
+            type="button"
+            class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 transition-all"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>İşlemi İptal Et</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. AŞAMA: İŞLEM TAMAMLANDIĞINDA VOKAL VE ENSTRÜMANTAL ÖNİZLEME & İNDİRME EKRANI -->
+      <div id="resultStep" class="hidden space-y-6">
+        <!-- Başarı Üst Bilgisi -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-lg sm:text-xl font-bold text-white">Profesyonel Ayrıştırma Tamamlandı!</h2>
+                <span id="usedEngineBadge" class="text-[11px] font-mono px-2.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  Meta HT-Demucs v4 Neural AI (ONNX)
+                </span>
+              </div>
+              <p id="resultFileSummary" class="text-xs sm:text-sm text-slate-400 truncate mt-0.5">
+                ornek_sarki.mp3 • 44.1 kHz
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <button
+              id="reprocessBtn"
+              type="button"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all"
+            >
+              <span>Kalite Ayarını Değiştir</span>
+            </button>
+            <button
+              id="newSongBtn"
+              type="button"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+            >
+              <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Yeni Dosya</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Canlı Stüdyo Karşılaştırma Mikseri (Senkronize Dinleme) -->
+        <div class="glass-subcard rounded-2xl p-4 sm:p-5 border border-violet-500/20">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <button
+                id="syncPlayAllBtn"
+                type="button"
+                class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-violet-600/25 transition-all"
+              >
+                <svg id="syncPlayIcon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                </svg>
+                <span id="syncPlayLabel">Senkronize Mikseri Başlat</span>
+              </button>
+              <div class="text-xs text-slate-400 hidden sm:block">
+                Çalarken modlar arasında anında geçiş yaparak ayrımı test edin:
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                id="modeBothBtn"
+                type="button"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 text-white transition-all"
+              >
+                Vokal + Müzik (Mix)
+              </button>
+              <button
+                id="modeSoloVocalBtn"
+                type="button"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all"
+              >
+                Sadece Vokal (Solo)
+              </button>
+              <button
+                id="modeSoloInstBtn"
+                type="button"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all"
+              >
+                Sadece Enstrümantal (Karaoke)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- İki Ana Kanal: VOKAL (VOCALS) ve ENSTRÜMANTAL (INSTRUMENTAL) Kartları -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          <!-- KART 1: VOKAL (VOCALS) -->
+          <div class="glass-subcard rounded-2xl p-5 sm:p-6 border border-fuchsia-500/30 relative overflow-hidden flex flex-col justify-between">
+            <div class="absolute -right-10 -top-10 w-36 h-36 bg-fuchsia-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-xl bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center text-fuchsia-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base sm:text-lg font-bold text-white">Vokal (Vocals)</h3>
+                    <p class="text-xs text-slate-400">Bas ve davuldan arındırılmış saf insan sesi</p>
+                  </div>
+                </div>
+                <span id="vocalsSizeBadge" class="text-xs font-mono px-2.5 py-1 rounded-lg bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                  WAV
+                </span>
+              </div>
+
+              <!-- Vokal Dalga Formu (Canvas) ve Oynatıcı -->
+              <div class="bg-slate-950/75 rounded-xl p-3.5 border border-white/5 mb-4">
+                <div class="flex items-center gap-3 mb-2.5">
+                  <button
+                    id="playVocalsBtn"
+                    type="button"
+                    class="w-10 h-10 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-fuchsia-600/30 transition-all"
+                    aria-label="Vokali Oynat/Duraklat"
+                  >
+                    <svg id="playVocalsIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                    </svg>
+                  </button>
+                  <div class="flex-1 min-w-0">
+                    <canvas id="vocalsWaveCanvas" width="420" height="50" class="w-full h-12 rounded cursor-pointer"></canvas>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3 text-xs text-slate-400 font-mono">
+                  <span id="vocalsTimeDisplay">00:00 / 00:00</span>
+                  <div class="flex items-center gap-2 w-32 sm:w-36">
+                    <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+                    </svg>
+                    <input id="vocalsVolume" type="range" min="0" max="100" value="100" class="w-full" aria-label="Vokal Ses Seviyesi" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vokal İndirme Butonu -->
+            <a
+              id="downloadVocalsBtn"
+              href="#"
+              download="Vocals_Stemify.wav"
+              class="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl font-bold text-sm sm:text-base text-white bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 shadow-lg shadow-fuchsia-600/25 transition-all active:scale-95"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Vokal (Vocals) İndir</span>
+            </a>
+          </div>
+
+          <!-- KART 2: ENSTRÜMANTAL (INSTRUMENTAL) -->
+          <div class="glass-subcard rounded-2xl p-5 sm:p-6 border border-cyan-500/30 relative overflow-hidden flex flex-col justify-between">
+            <div class="absolute -right-10 -top-10 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base sm:text-lg font-bold text-white">Enstrümantal (Instrumental)</h3>
+                    <p class="text-xs text-slate-400">Faz koruyucu stereo altyapı (Bas & Davul tam)</p>
+                  </div>
+                </div>
+                <span id="instSizeBadge" class="text-xs font-mono px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  WAV
+                </span>
+              </div>
+
+              <!-- Enstrümantal Dalga Formu (Canvas) ve Oynatıcı -->
+              <div class="bg-slate-950/75 rounded-xl p-3.5 border border-white/5 mb-4">
+                <div class="flex items-center gap-3 mb-2.5">
+                  <button
+                    id="playInstBtn"
+                    type="button"
+                    class="w-10 h-10 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-cyan-600/30 transition-all"
+                    aria-label="Enstrümantali Oynat/Duraklat"
+                  >
+                    <svg id="playInstIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                    </svg>
+                  </button>
+                  <div class="flex-1 min-w-0">
+                    <canvas id="instWaveCanvas" width="420" height="50" class="w-full h-12 rounded cursor-pointer"></canvas>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3 text-xs text-slate-400 font-mono">
+                  <span id="instTimeDisplay">00:00 / 00:00</span>
+                  <div class="flex items-center gap-2 w-32 sm:w-36">
+                    <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+                    </svg>
+                    <input id="instVolume" type="range" min="0" max="100" value="100" class="w-full" aria-label="Enstrümantal Ses Seviyesi" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Enstrümantal İndirme Butonu -->
+            <a
+              id="downloadInstBtn"
+              href="#"
+              download="Instrumental_Stemify.wav"
+              class="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl font-bold text-sm sm:text-base text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-lg shadow-cyan-600/25 transition-all active:scale-95"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Enstrümantal (Instrumental) İndir</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- EKSTRA: HT-Demucs 4-Stem İndirme Alanı (Demucs AI seçildiğinde görünür) -->
+        <div id="extraStemsPanel" class="hidden glass-subcard rounded-2xl p-5 border border-emerald-500/25">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>HT-Demucs v4 Ekstra Stüdyo Kanalları (Drums • Bass • Other)</span>
+              </h3>
+              <p class="text-xs text-slate-400">Yapay zeka modeli enstrümantal altyapıyı ayrıca 3 alt enstrüman grubuna daha ayırdı:</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <a id="downloadDrumsBtn" href="#" download="Drums_Stemify.wav" class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-all">
+              <div>
+                <p class="text-xs font-bold text-white">🥁 Davul (Drums)</p>
+                <p class="text-[11px] text-slate-400 font-mono">İzole Perküsyon WAV</p>
+              </div>
+              <span class="text-xs font-semibold text-emerald-400">İndir ↓</span>
+            </a>
+            <a id="downloadBassBtn" href="#" download="Bass_Stemify.wav" class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-all">
+              <div>
+                <p class="text-xs font-bold text-white">🎸 Bas (Bass)</p>
+                <p class="text-[11px] text-slate-400 font-mono">İzole Bas Gitar/Synth WAV</p>
+              </div>
+              <span class="text-xs font-semibold text-emerald-400">İndir ↓</span>
+            </a>
+            <a id="downloadOtherBtn" href="#" download="Other_Stemify.wav" class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-all">
+              <div>
+                <p class="text-xs font-bold text-white">🎹 Melodi / Diğer (Other)</p>
+                <p class="text-[11px] text-slate-400 font-mono">Gitar, Piyano, Yaylı WAV</p>
+              </div>
+              <span class="text-xs font-semibold text-emerald-400">İndir ↓</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Gizli Audio Elementleri -->
+        <audio id="vocalsAudio" preload="auto"></audio>
+        <audio id="instAudio" preload="auto"></audio>
+      </div>
+    </section>
+
+    <!-- Teknoloji Bölümü -->
+    <section id="teknoloji" class="mt-14 sm:mt-20">
+      <div class="text-center max-w-2xl mx-auto mb-10">
+        <h2 class="text-2xl sm:text-3xl font-bold text-white">Neden Ses Kalitesi Çok Daha Yüksek?</h2>
+        <p class="text-sm sm:text-base text-slate-400 mt-2">
+          Klasik vokal silme araçları sağ ve sol kanalı birbirinden çıkararak (`L - R`) basları yok eder ve sesi boğuklaştırır. Stemify.io ise gerçek Meta HT-Demucs v4 derin öğrenme mimarisi kullanır:
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card rounded-2xl p-6">
+          <div class="w-11 h-11 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-white mb-2">Meta HT-Demucs v4 ONNX</h3>
+          <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Meta AI tarafından geliştirilen Hybrid Transformer Demucs modeli, arka plan Web Worker'ında WebGPU (ekran kartı) veya çok çekirdekli WASM SIMD ile tam hassasiyette (FP32) çalışır. Vokali davul, bas ve enstrümanlardan yapay zeka ile ayırır.
+          </p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6">
+          <div class="w-11 h-11 rounded-xl bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center text-fuchsia-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-white mb-2">4-Stem Bağımsız Kanal Ayrımı</h3>
+          <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Şarkıyı Vokal, Davul, Bas ve Diğer Enstrümanlar olarak 4 bağımsız kanala ayırır; davul, bas ve müziği birleştirerek sıfır faz kaybıyla tam Enstrümantal üretir.
+          </p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6">
+          <div class="w-11 h-11 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-white mb-2">24-Bit Kayıpsız WAV Mastering</h3>
+          <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Çıktılar sıkıştırılmış düşük bit hızlı formatlar yerine 44.1 kHz / 24-Bit doğrusal PCM WAV olarak üretilir, böylece tizler ve baslar kristal netliğinde kalır.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Nasıl Çalışır Bölümü -->
+    <section id="nasil-calisir" class="mt-14 sm:mt-20">
+      <div class="glass-card rounded-2xl sm:rounded-3xl p-6 sm:p-10">
+        <h2 class="text-xl sm:text-2xl font-bold text-white mb-6 text-center">3 Adımda Profesyonel Vokal Ayırma</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="flex items-start gap-4">
+            <span class="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-300 font-mono font-bold flex items-center justify-center shrink-0">1</span>
+            <div>
+              <h3 class="font-bold text-white text-sm sm:text-base">Şarkınızı Seçin</h3>
+              <p class="text-xs sm:text-sm text-slate-400 mt-1">MP3, WAV veya FLAC dosyanızı yükleme alanına sürükleyin veya seçin.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <span class="w-9 h-9 rounded-xl bg-fuchsia-600/20 border border-fuchsia-500/40 text-fuchsia-300 font-mono font-bold flex items-center justify-center shrink-0">2</span>
+            <div>
+              <h3 class="font-bold text-white text-sm sm:text-base">HT-Demucs v4 AI Çalıştırın</h3>
+              <p class="text-xs sm:text-sm text-slate-400 mt-1">Meta HT-Demucs v4 derin öğrenme sinir ağı vokali ve enstrümanları birbirinden ayırsın.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <span class="w-9 h-9 rounded-xl bg-cyan-600/20 border border-cyan-500/40 text-cyan-300 font-mono font-bold flex items-center justify-center shrink-0">3</span>
+            <div>
+              <h3 class="font-bold text-white text-sm sm:text-base">Canlı Mikserde Dinleyin & İndirin</h3>
+              <p class="text-xs sm:text-sm text-slate-400 mt-1">Vokal ve Enstrümantal kanalları Solo/Mix modunda test edin ve 24-Bit WAV olarak indirin.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Alt Bilgi (Footer) -->
+  <footer class="border-t border-white/5 py-8 mt-12 text-center text-xs sm:text-sm text-slate-500">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-slate-300">Stemify.io</span>
+        <span>— Meta HT-Demucs v4 ONNX Vokal Ayırma Stüdyosu</span>
+      </div>
+      <p>© 2026 Stemify.io. Tüm hakları saklıdır.</p>
+    </div>
+  </footer>
+
+  <!-- Bildirim (Toast) -->
+  <div id="toastNotice" class="fixed bottom-5 right-5 z-50 hidden max-w-sm glass-card border border-violet-500/40 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm">
+    <span class="w-2.5 h-2.5 rounded-full bg-violet-400 shrink-0"></span>
+    <span id="toastMessage">İşlem başarılı.</span>
+  </div>
+
+  <!-- ============================================================================
+       ARKA PLAN YAPAY ZEKA MOTORU (WEB WORKER KAYNAĞI)
+       Meta HT-Demucs v4 ONNX • WebGPU / Çok Çekirdekli WASM SIMD
+       Paketlenmiş Gerçel FFT STFT/iSTFT • Üçgen Örtüşmeli Segment Birleştirme
+       24/16-Bit WAV Mastering — Ana sayfadan bağımsız çalışır, arayüz donmaz.
+       ============================================================================ -->
+  <script id="stemifyWorkerSource" type="text/plain">
+'use strict';
+
+const TRAINING_SAMPLES = 343980;
+const FFT_SIZE = 4096;
+const HOP_SIZE = 1024;
+const BINS = 2048;
+const FRAMES = 336;
+const BF = BINS * FRAMES;
+const N = FFT_SIZE;
+
+let session = null;
+let backend = 'wasm';
+let threadsUsed = 1;
+let modelBytes = null;
+let gpuValidated = false;
+let graphOpt = 'all';
+
+const post = (msg, transfer) => self.postMessage(msg, transfer || []);
+
+// ---------------------------------------------------------------------------
+// FFT TABLOLARI (bir kez hesaplanır)
+// ---------------------------------------------------------------------------
+const LOG2N = Math.log2(N) | 0;
+const BITREV = new Uint32Array(N);
+for (let i = 0; i < N; i++) {
+  let r = 0;
+  let x = i;
+  for (let b = 0; b < LOG2N; b++) {
+    r = (r << 1) | (x & 1);
+    x >>= 1;
+  }
+  BITREV[i] = r;
+}
+const COS = new Float64Array(N / 2);
+const SIN = new Float64Array(N / 2);
+for (let k = 0; k < N / 2; k++) {
+  COS[k] = Math.cos((2 * Math.PI * k) / N);
+  SIN[k] = Math.sin((2 * Math.PI * k) / N);
+}
+const HANN = new Float64Array(N);
+for (let i = 0; i < N; i++) HANN[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / N));
+
+const RE = new Float64Array(N);
+const IM = new Float64Array(N);
+
+// iSTFT pencere toplamı (tüm segmentler için sabit, önceden hesaplanır)
+const PADDED_FRAMES = FRAMES + 4;
+const ISTFT_LEN = (PADDED_FRAMES - 1) * HOP_SIZE + N;
+const OUT_OFFSET = N / 2 + Math.floor(HOP_SIZE / 2) * 3;
+const INV_WSUM = new Float64Array(ISTFT_LEN);
+for (let f = 0; f < PADDED_FRAMES; f++) {
+  const s = f * HOP_SIZE;
+  for (let i = 0; i < N; i++) INV_WSUM[s + i] += HANN[i] * HANN[i];
+}
+for (let i = 0; i < ISTFT_LEN; i++) INV_WSUM[i] = INV_WSUM[i] > 1e-8 ? 1 / INV_WSUM[i] : 1;
+const ACC_L = new Float64Array(ISTFT_LEN);
+const ACC_R = new Float64Array(ISTFT_LEN);
+
+function fftInPlace(re, im, inverse) {
+  for (let i = 0; i < N; i++) {
+    const j = BITREV[i];
+    if (j > i) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+      t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  const sgn = inverse ? 1 : -1;
+  for (let size = 2; size <= N; size <<= 1) {
+    const half = size >> 1;
+    const step = N / size;
+    for (let i = 0; i < N; i += size) {
+      for (let j = 0, k = 0; j < half; j++, k += step) {
+        const wr = COS[k];
+        const wi = sgn * SIN[k];
+        const a = i + j;
+        const b = a + half;
+        const br = re[b];
+        const bi = im[b];
+        const xr = br * wr - bi * wi;
+        const xi = br * wi + bi * wr;
+        re[b] = re[a] - xr;
+        im[b] = im[a] - xi;
+        re[a] += xr;
+        im[a] += xi;
+      }
+    }
+  }
+}
+
+function reflectPad(signal, padLeft, padRight) {
+  const length = signal.length;
+  const output = new Float32Array(padLeft + length + padRight);
+  for (let i = 0; i < padLeft; i++) output[i] = signal[Math.min(padLeft - i, length - 1)];
+  output.set(signal, padLeft);
+  for (let i = 0; i < padRight; i++) output[padLeft + length + i] = signal[Math.max(0, length - 2 - i)];
+  return output;
+}
+
+// ---------------------------------------------------------------------------
+// MODEL GİRDİSİ: Sol+Sağ kanal tek karmaşık FFT ile birlikte (2x hızlı STFT)
+// ---------------------------------------------------------------------------
+function prepareInput(segL, segR) {
+  const le = Math.ceil(TRAINING_SAMPLES / HOP_SIZE);
+  const pad = Math.floor(HOP_SIZE / 2) * 3;
+  const padRight = pad + le * HOP_SIZE - TRAINING_SAMPLES;
+  const cL = reflectPad(reflectPad(segL, pad, padRight), N / 2, N / 2);
+  const cR = reflectPad(reflectPad(segR, pad, padRight), N / 2, N / 2);
+
+  const magSpec = new Float32Array(4 * BF);
+  const scale = 0.5 / Math.sqrt(N);
+
+  for (let f = 0; f < FRAMES; f++) {
+    const start = (f + 2) * HOP_SIZE;
+    for (let i = 0; i < N; i++) {
+      const w = HANN[i];
+      RE[i] = cL[start + i] * w;
+      IM[i] = cR[start + i] * w;
+    }
+    fftInPlace(RE, IM, false);
+    for (let b = 0; b < BINS; b++) {
+      const nk = (N - b) & (N - 1);
+      const zr = RE[b], zi = IM[b], wr = RE[nk], wi = IM[nk];
+      const idx = b * FRAMES + f;
+      magSpec[idx] = (zr + wr) * scale;
+      magSpec[BF + idx] = (zi - wi) * scale;
+      magSpec[2 * BF + idx] = (zi + wi) * scale;
+      magSpec[3 * BF + idx] = (wr - zr) * scale;
+    }
+  }
+
+  const waveform = new Float32Array(2 * TRAINING_SAMPLES);
+  waveform.set(segL, 0);
+  waveform.set(segR, TRAINING_SAMPLES);
+  return { waveform, magSpec };
+}
+
+// ---------------------------------------------------------------------------
+// FREKANS DALI ÇIKTISI → ZAMAN (Sol+Sağ tek karmaşık iFFT ile, 2x hızlı iSTFT)
+// ---------------------------------------------------------------------------
+function addFreqTrackToTime(freq, t, outL, outR) {
+  ACC_L.fill(0);
+  ACC_R.fill(0);
+  const base = t * 4 * BF;
+  const g = Math.sqrt(N) / N;
+
+  for (let f = 0; f < FRAMES; f++) {
+    RE[0] = freq[base + f];
+    IM[0] = freq[base + 2 * BF + f];
+    RE[N / 2] = 0;
+    IM[N / 2] = 0;
+    for (let b = 1; b < BINS; b++) {
+      const idx = base + b * FRAMES + f;
+      const a = freq[idx];
+      const bi = freq[idx + BF];
+      const c = freq[idx + 2 * BF];
+      const d = freq[idx + 3 * BF];
+      RE[b] = a - d;
+      IM[b] = bi + c;
+      RE[N - b] = a + d;
+      IM[N - b] = c - bi;
+    }
+    fftInPlace(RE, IM, true);
+    const start = (f + 2) * HOP_SIZE;
+    for (let i = 0; i < N; i++) {
+      const w = HANN[i] * g;
+      ACC_L[start + i] += RE[i] * w;
+      ACC_R[start + i] += IM[i] * w;
+    }
+  }
+
+  for (let i = 0; i < TRAINING_SAMPLES; i++) {
+    const p = OUT_OFFSET + i;
+    const k = INV_WSUM[p];
+    outL[i] += ACC_L[p] * k;
+    outR[i] += ACC_R[p] * k;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ONNX OTURUMU (WebGPU → Çok Çekirdekli WASM otomatik geçiş)
+// ---------------------------------------------------------------------------
+async function detectGpu() {
+  if (!self.navigator || !navigator.gpu) return false;
+  try {
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    return !!adapter;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function createSession(ep) {
+  const levels = graphOpt === 'basic' ? ['basic'] : [graphOpt, 'basic'];
+  let lastErr = null;
+  for (const lvl of levels) {
+    try {
+      return await ort.InferenceSession.create(modelBytes, {
+        executionProviders: [ep],
+        graphOptimizationLevel: lvl,
+        enableCpuMemArena: false,
+        enableMemPattern: false
+      });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+async function initEngine(msg) {
+  importScripts(msg.ortBase + 'ort.all.min.js');
+  ort.env.logLevel = 'error';
+  ort.env.wasm.wasmPaths = msg.ortBase;
+  ort.env.wasm.numThreads = msg.threads;
+  ort.env.wasm.proxy = false;
+  graphOpt = msg.graphOpt || 'all';
+  modelBytes = new Uint8Array(msg.model);
+
+  const wantGpu = msg.engine !== 'wasm' && (await detectGpu());
+  if (wantGpu) {
+    try {
+      if (ort.env.webgpu) ort.env.webgpu.powerPreference = 'high-performance';
+      post({ type: 'status', pct: 37, title: 'WebGPU (ekran kartı) hızlandırma etkinleştiriliyor...', detail: 'Yapay zeka modeli GPU belleğine yükleniyor' });
+      session = await createSession('webgpu');
+      backend = 'webgpu';
+    } catch (e) {
+      session = null;
+    }
+  }
+  if (!session) {
+    post({ type: 'status', pct: 38, title: 'Çok çekirdekli WASM SIMD motoru hazırlanıyor...', detail: msg.threads + ' iş parçacığı ile yapay zeka grafiği derleniyor' });
+    session = await createSession('wasm');
+    backend = 'wasm';
+  }
+  threadsUsed = ort.env.wasm.numThreads || msg.threads;
+  post({ type: 'ready', backend, threads: threadsUsed });
+}
+
+async function switchToWasm() {
+  if (!modelBytes) throw new Error('GPU hatası sonrası model yeniden yüklenemedi.');
+  try { if (session) await session.release(); } catch (e) {}
+  session = null;
+  post({ type: 'status', pct: 40, title: 'GPU uyumsuz — çok çekirdekli CPU moduna geçiliyor...', detail: 'Kalite korunarak WASM SIMD ile devam ediliyor' });
+  session = await createSession('wasm');
+  backend = 'wasm';
+  gpuValidated = true;
+  post({ type: 'backend', backend, threads: threadsUsed });
+}
+
+async function runSegment(segL, segR) {
+  const input = prepareInput(segL, segR);
+  const feeds = {};
+  feeds[session.inputNames[0]] = new ort.Tensor('float32', input.waveform, [1, 2, TRAINING_SAMPLES]);
+  if (session.inputNames.length > 1) {
+    feeds[session.inputNames[1]] = new ort.Tensor('float32', input.magSpec, [1, 4, BINS, FRAMES]);
+  }
+  const results = await session.run(feeds);
+
+  let timeData = null;
+  let timeShape = null;
+  let freqData = null;
+  for (const name of session.outputNames) {
+    const tensor = results[name];
+    if (tensor.dims.length === 4 && tensor.dims[2] === 2) {
+      timeData = tensor.data;
+      timeShape = tensor.dims;
+    } else if (tensor.dims.length === 5 && tensor.dims[2] === 4) {
+      freqData = tensor.data;
+    }
+  }
+  if (!timeData && !freqData) throw new Error('Model çıktısı tanınamadı.');
+
+  const stems = [];
+  for (let t = 0; t < 4; t++) {
+    const L = new Float32Array(TRAINING_SAMPLES);
+    const R = new Float32Array(TRAINING_SAMPLES);
+    if (timeData) {
+      const numCh = timeShape[2];
+      const samples = timeShape[3];
+      const n = Math.min(samples, TRAINING_SAMPLES);
+      const offL = t * numCh * samples;
+      const offR = offL + samples;
+      for (let i = 0; i < n; i++) {
+        L[i] = timeData[offL + i];
+        R[i] = timeData[offR + i];
+      }
+    }
+    if (freqData) addFreqTrackToTime(freqData, t, L, R);
+    stems.push({ L, R });
+  }
+  for (const name of session.outputNames) {
+    try { results[name].dispose(); } catch (e) {}
+  }
+  return stems;
+}
+
+// GPU çıktısı kalite doğrulaması: NaN/Inf veya karışımla uyumsuz çıktı varsa CPU'ya geçilir
+function validateStems(stems, segL, segR, len) {
+  let energy = 0;
+  let resid = 0;
+  for (let i = 0; i < len; i++) {
+    let sl = 0, sr = 0;
+    for (let t = 0; t < 4; t++) {
+      sl += stems[t].L[i];
+      sr += stems[t].R[i];
+    }
+    if (!Number.isFinite(sl) || !Number.isFinite(sr)) return false;
+    const dl = segL[i] - sl;
+    const dr = segR[i] - sr;
+    resid += dl * dl + dr * dr;
+    energy += segL[i] * segL[i] + segR[i] * segR[i];
+  }
+  if (energy < 1e-3 * len) return true;
+  return resid < 0.5 * energy;
+}
+
+// ---------------------------------------------------------------------------
+// WAV MASTERING (24-Bit / 16-Bit TPDF Dither) + Dalga Formu Tepe Noktaları
+// ---------------------------------------------------------------------------
+function encodeWav(listL, listR, sampleRate, bitDepth) {
+  const n = listL[0].length;
+  const ns = listL.length;
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    let l = 0, r = 0;
+    for (let s = 0; s < ns; s++) {
+      l += listL[s][i];
+      r += listR[s][i];
+    }
+    const a = l < 0 ? -l : l;
+    const b = r < 0 ? -r : r;
+    if (a > peak) peak = a;
+    if (b > peak) peak = b;
+  }
+  const gain = peak > 0.98 ? 0.97 / peak : 1;
+  const bps = bitDepth === 24 ? 3 : 2;
+  const dataLen = n * 2 * bps;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(buf);
+  dv.setUint32(0, 0x46464952, true);
+  dv.setUint32(4, 36 + dataLen, true);
+  dv.setUint32(8, 0x45564157, true);
+  dv.setUint32(12, 0x20746d66, true);
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 2, true);
+  dv.setUint32(24, sampleRate, true);
+  dv.setUint32(28, sampleRate * 2 * bps, true);
+  dv.setUint16(32, 2 * bps, true);
+  dv.setUint16(34, bitDepth, true);
+  dv.setUint32(36, 0x61746164, true);
+  dv.setUint32(40, dataLen, true);
+
+  if (bitDepth === 24) {
+    const u8 = new Uint8Array(buf);
+    let p = 44;
+    for (let i = 0; i < n; i++) {
+      let l = 0, r = 0;
+      for (let s = 0; s < ns; s++) {
+        l += listL[s][i];
+        r += listR[s][i];
+      }
+      l *= gain; r *= gain;
+      l = l > 1 ? 1 : l < -1 ? -1 : l;
+      r = r > 1 ? 1 : r < -1 ? -1 : r;
+      const vl = Math.round(l < 0 ? l * 8388608 : l * 8388607);
+      const vr = Math.round(r < 0 ? r * 8388608 : r * 8388607);
+      u8[p] = vl & 255; u8[p + 1] = (vl >> 8) & 255; u8[p + 2] = (vl >> 16) & 255;
+      u8[p + 3] = vr & 255; u8[p + 4] = (vr >> 8) & 255; u8[p + 5] = (vr >> 16) & 255;
+      p += 6;
+    }
+  } else {
+    const i16 = new Int16Array(buf, 44, n * 2);
+    let seed = 0x9e3779b9;
+    const rnd = () => {
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      return (seed >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < n; i++) {
+      let l = 0, r = 0;
+      for (let s = 0; s < ns; s++) {
+        l += listL[s][i];
+        r += listR[s][i];
+      }
+      let il = l * gain * 32767 + (rnd() - rnd());
+      let ir = r * gain * 32767 + (rnd() - rnd());
+      il = Math.round(il); ir = Math.round(ir);
+      i16[2 * i] = il > 32767 ? 32767 : il < -32768 ? -32768 : il;
+      i16[2 * i + 1] = ir > 32767 ? 32767 : ir < -32768 ? -32768 : ir;
+    }
+  }
+  return buf;
+}
+
+function computePeaks(listL, listR, count) {
+  const n = listL[0].length;
+  const ns = listL.length;
+  const block = Math.max(1, Math.floor(n / count));
+  const peaks = [];
+  let maxVal = 0.01;
+  for (let c = 0; c < count; c++) {
+    let sum = 0;
+    const start = c * block;
+    for (let j = 0; j < block && start + j < n; j++) {
+      let l = 0, r = 0;
+      for (let s = 0; s < ns; s++) {
+        l += listL[s][start + j];
+        r += listR[s][start + j];
+      }
+      sum += 0.5 * (Math.abs(l) + Math.abs(r));
+    }
+    const avg = sum / block;
+    if (avg > maxVal) maxVal = avg;
+    peaks.push(avg);
+  }
+  return peaks.map((p) => Math.min(1, Math.max(0.1, p / maxVal)));
+}
+
+// ---------------------------------------------------------------------------
+// TAM ŞARKI AYRIŞTIRMA (Üçgen ağırlıklı örtüşmeli segmentler — Demucs resmi yöntemi)
+// ---------------------------------------------------------------------------
+async function separate(msg) {
+  const left = new Float32Array(msg.left);
+  const right = new Float32Array(msg.right);
+  const total = left.length;
+  const seg = TRAINING_SAMPLES;
+
+  // Resmi Demucs giriş standardizasyonu (şarkı geneli ortalama / standart sapma)
+  let sum = 0;
+  for (let i = 0; i < total; i++) sum += (left[i] + right[i]) * 0.5;
+  const mean = sum / Math.max(1, total);
+  let sq = 0;
+  for (let i = 0; i < total; i++) {
+    const d = (left[i] + right[i]) * 0.5 - mean;
+    sq += d * d;
+  }
+  let std = Math.sqrt(sq / Math.max(1, total - 1));
+  if (!(std > 1e-6)) std = 1;
+  const inv = 1 / std;
+
+  const stride = Math.max(1, Math.floor(seg * (1 - msg.overlap)));
+  const numSeg = total <= seg ? 1 : Math.ceil((total - seg) / stride) + 1;
+
+  const out = [];
+  for (let t = 0; t < 4; t++) out.push({ L: new Float32Array(total), R: new Float32Array(total) });
+  const wsum = new Float32Array(total);
+
+  const half = seg >> 1;
+  const tri = new Float32Array(seg);
+  for (let i = 0; i < seg; i++) tri[i] = (i < half ? i + 1 : seg - i) / half;
+
+  const segL = new Float32Array(seg);
+  const segR = new Float32Array(seg);
+  let firstDone = false;
+
+  for (let s = 0; s < numSeg; s++) {
+    const start = s * stride;
+    const len = Math.min(seg, total - start);
+    segL.fill(0);
+    segR.fill(0);
+    for (let i = 0; i < len; i++) {
+      segL[i] = (left[start + i] - mean) * inv;
+      segR[i] = (right[start + i] - mean) * inv;
+    }
+
+    post({ type: 'seg-start', index: s, total: numSeg, backend });
+    const t0 = performance.now();
+
+    let stems;
+    try {
+      stems = await runSegment(segL, segR);
+    } catch (e) {
+      if (backend === 'webgpu') {
+        await switchToWasm();
+        stems = await runSegment(segL, segR);
+      } else {
+        throw e;
+      }
+    }
+
+    if (backend === 'webgpu' && !gpuValidated) {
+      if (!validateStems(stems, segL, segR, len)) {
+        await switchToWasm();
+        stems = await runSegment(segL, segR);
+      }
+      gpuValidated = true;
+    }
+
+    if (!firstDone) {
+      firstDone = true;
+      modelBytes = null; // 172 MB RAM serbest bırakılır (düşük bellekli cihazlar için)
+    }
+
+    for (let t = 0; t < 4; t++) {
+      const oL = out[t].L, oR = out[t].R, sL = stems[t].L, sR = stems[t].R;
+      for (let i = 0; i < len; i++) {
+        const w = tri[i];
+        oL[start + i] += sL[i] * w;
+        oR[start + i] += sR[i] * w;
+      }
+    }
+    for (let i = 0; i < len; i++) wsum[start + i] += tri[i];
+
+    post({ type: 'seg-done', index: s, total: numSeg, ms: performance.now() - t0, backend });
+  }
+
+  for (let i = 0; i < total; i++) {
+    const k = wsum[i] > 0 ? std / wsum[i] : 0;
+    for (let t = 0; t < 4; t++) {
+      out[t].L[i] *= k;
+      out[t].R[i] *= k;
+    }
+  }
+
+  const sr = msg.sampleRate;
+  const bd = msg.bitDepth;
+  post({ type: 'status', pct: 95, title: bd + '-Bit stüdyo WAV dosyaları kodlanıyor...', detail: 'Peak normalizasyon' + (bd === 16 ? ' + TPDF dither' : '') + ' • 5 kanal' });
+
+  const instL = [out[0].L, out[1].L, out[2].L];
+  const instR = [out[0].R, out[1].R, out[2].R];
+  const vocalsPeaks = computePeaks([out[3].L], [out[3].R], 70);
+  const instPeaks = computePeaks(instL, instR, 70);
+
+  const vocals = encodeWav([out[3].L], [out[3].R], sr, bd);
+  out[3] = null;
+  post({ type: 'status', pct: 96, title: 'Enstrümantal kanal kodlanıyor...', detail: 'Davul + Bas + Diğer faz uyumlu birleştiriliyor' });
+  const instrumental = encodeWav(instL, instR, sr, bd);
+  post({ type: 'status', pct: 97, title: 'Ekstra stüdyo kanalları kodlanıyor...', detail: 'Drums • Bass • Other' });
+  const drums = encodeWav([out[0].L], [out[0].R], sr, bd);
+  const bass = encodeWav([out[1].L], [out[1].R], sr, bd);
+  const other = encodeWav([out[2].L], [out[2].R], sr, bd);
+
+  post(
+    { type: 'done', vocals, instrumental, drums, bass, other, vocalsPeaks, instPeaks, backend, threads: threadsUsed, segments: numSeg },
+    [vocals, instrumental, drums, bass, other]
+  );
+}
+
+self.onmessage = async (e) => {
+  const msg = e.data;
+  try {
+    if (msg.type === 'init') await initEngine(msg);
+    else if (msg.type === 'separate') await separate(msg);
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    if (msg.type === 'init') {
+      modelBytes = null;
+      const back = msg.model && msg.model.byteLength ? msg.model : null;
+      post({ type: 'init-error', message, model: back }, back ? [back] : []);
+    } else {
+      post({ type: 'error', message, backend });
+    }
+  }
+};
+  </script>
+
+  <!-- Uygulama JavaScript Kodu -->
+  <script>
+    (function () {
+      // Sabitler
+      const SAMPLE_RATE = 44100;
+      const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+      const DEMUCS_MODEL_URL = 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
+      const DEMUCS_MODEL_SIZE = 180534758;
+      const IDB_NAME = 'StemifyModelCacheDB';
+      const IDB_STORE = 'models';
+      const IDB_KEY = 'htdemucs_embedded_v4';
+      const MAX_THREADS = 8;
+      const OVERLAP_BY_PROFILE = { turbo: 0.1, max: 0.25 };
+
+      // Gelişmiş/test parametreleri (?engine=wasm|webgpu&threads=4&opt=basic)
+      const urlParams = new URLSearchParams(location.search);
+      const FORCE_ENGINE = urlParams.get('engine');
+      const FORCE_THREADS = parseInt(urlParams.get('threads'), 10);
+      const GRAPH_OPT = urlParams.get('opt') || 'all';
+
+      // DOM Referansları
+      const audioFileInput = document.getElementById('audioFileInput');
+      const dropZone = document.getElementById('dropZone');
+      const selectFileBtn = document.getElementById('selectFileBtn');
+      const loadDemoBtn = document.getElementById('loadDemoBtn');
+      const demoTrackBtnTop = document.getElementById('demoTrackBtnTop');
+      const changeFileBtn = document.getElementById('changeFileBtn');
+      const startProcessBtn = document.getElementById('startProcessBtn');
+      const newSongBtn = document.getElementById('newSongBtn');
+      const reprocessBtn = document.getElementById('reprocessBtn');
+      const cancelProcessBtn = document.getElementById('cancelProcessBtn');
+
+      const uploadStep = document.getElementById('uploadStep');
+      const fileSelectedStep = document.getElementById('fileSelectedStep');
+      const processingStep = document.getElementById('processingStep');
+      const resultStep = document.getElementById('resultStep');
+
+      const selectedFileName = document.getElementById('selectedFileName');
+      const selectedFileSize = document.getElementById('selectedFileSize');
+      const selectedFileDuration = document.getElementById('selectedFileDuration');
+      const selectedFileSampleRate = document.getElementById('selectedFileSampleRate');
+      const fileFormatBadge = document.getElementById('fileFormatBadge');
+
+      const demucsCacheHint = document.getElementById('demucsCacheHint');
+      const aiCacheDot = document.getElementById('aiCacheDot');
+      const aiCacheText = document.getElementById('aiCacheText');
+
+      const wavBitDepthSelect = document.getElementById('wavBitDepthSelect');
+      const speedProfileSelect = document.getElementById('speedProfileSelect');
+      const capGpu = document.getElementById('capGpu');
+      const capCpu = document.getElementById('capCpu');
+      const capIso = document.getElementById('capIso');
+      const capEngine = document.getElementById('capEngine');
+
+      const processStageTitle = document.getElementById('processStageTitle');
+      const processFileNameSub = document.getElementById('processFileNameSub');
+      const progressPercentage = document.getElementById('progressPercentage');
+      const progressBarFill = document.getElementById('progressBarFill');
+      const processDetailLog = document.getElementById('processDetailLog');
+      const engineInfoBadge = document.getElementById('engineInfoBadge');
+      const elapsedBadge = document.getElementById('elapsedBadge');
+      const etaBadge = document.getElementById('etaBadge');
+      const stepBadge1 = document.getElementById('stepBadge1');
+      const stepBadge2 = document.getElementById('stepBadge2');
+      const stepBadge3 = document.getElementById('stepBadge3');
+      const stepBadge4 = document.getElementById('stepBadge4');
+
+      const usedEngineBadge = document.getElementById('usedEngineBadge');
+      const resultFileSummary = document.getElementById('resultFileSummary');
+      const vocalsSizeBadge = document.getElementById('vocalsSizeBadge');
+      const instSizeBadge = document.getElementById('instSizeBadge');
+
+      const syncPlayAllBtn = document.getElementById('syncPlayAllBtn');
+      const syncPlayIcon = document.getElementById('syncPlayIcon');
+      const syncPlayLabel = document.getElementById('syncPlayLabel');
+      const modeBothBtn = document.getElementById('modeBothBtn');
+      const modeSoloVocalBtn = document.getElementById('modeSoloVocalBtn');
+      const modeSoloInstBtn = document.getElementById('modeSoloInstBtn');
+
+      const playVocalsBtn = document.getElementById('playVocalsBtn');
+      const playVocalsIcon = document.getElementById('playVocalsIcon');
+      const vocalsWaveCanvas = document.getElementById('vocalsWaveCanvas');
+      const vocalsTimeDisplay = document.getElementById('vocalsTimeDisplay');
+      const vocalsVolume = document.getElementById('vocalsVolume');
+      const downloadVocalsBtn = document.getElementById('downloadVocalsBtn');
+      const vocalsAudio = document.getElementById('vocalsAudio');
+
+      const playInstBtn = document.getElementById('playInstBtn');
+      const playInstIcon = document.getElementById('playInstIcon');
+      const instWaveCanvas = document.getElementById('instWaveCanvas');
+      const instTimeDisplay = document.getElementById('instTimeDisplay');
+      const instVolume = document.getElementById('instVolume');
+      const downloadInstBtn = document.getElementById('downloadInstBtn');
+      const instAudio = document.getElementById('instAudio');
+
+      const extraStemsPanel = document.getElementById('extraStemsPanel');
+      const downloadDrumsBtn = document.getElementById('downloadDrumsBtn');
+      const downloadBassBtn = document.getElementById('downloadBassBtn');
+      const downloadOtherBtn = document.getElementById('downloadOtherBtn');
+
+      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+      const mobileMenu = document.getElementById('mobileMenu');
+      const toastNotice = document.getElementById('toastNotice');
+      const toastMessage = document.getElementById('toastMessage');
+
+      // Uygulama Durumu
+      let currentFile = null;
+      let decodedAudioBuffer = null;
+      let decodePromise = null;
+      let isDemoCleanStems = false;
+      let demoVocalsBuffer = null;
+      let demoInstBuffer = null;
+
+      let vocalsBlobUrl = null;
+      let instBlobUrl = null;
+      let drumsBlobUrl = null;
+      let bassBlobUrl = null;
+      let otherBlobUrl = null;
+
+      let vocalsPeaks = [];
+      let instPeaks = [];
+      let isSyncPlaying = false;
+      let toastTimer = null;
+
+      // Arka plan motor durumu
+      let workerUrl = null;
+      let engineWorker = null;
+      let engineInfo = null;
+      let enginePromise = null;
+      let engineProgressCb = null;
+      let activeJobReject = null;
+      let cancelRequested = false;
+      let isProcessing = false;
+
+      // Mobil Menü
+      mobileMenuBtn.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+      });
+
+      function showToast(msg) {
+        toastMessage.textContent = msg;
+        toastNotice.classList.remove('hidden');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastNotice.classList.add('hidden');
+        }, 4200);
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 KB';
+        const kb = bytes / 1024;
+        if (kb < 1024) return kb.toFixed(1) + ' KB';
+        return (kb / 1024).toFixed(2) + ' MB';
+      }
+
+      function formatTime(sec) {
+        if (!isFinite(sec) || sec < 0) return '00:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+      }
+
+      const nextFrame = () => new Promise((resolve) => setTimeout(resolve, 16));
+
+      function showStep(stepName) {
+        uploadStep.classList.add('hidden');
+        fileSelectedStep.classList.add('hidden');
+        processingStep.classList.add('hidden');
+        resultStep.classList.add('hidden');
+
+        if (stepName === 'upload') uploadStep.classList.remove('hidden');
+        if (stepName === 'selected') fileSelectedStep.classList.remove('hidden');
+        if (stepName === 'processing') processingStep.classList.remove('hidden');
+        if (stepName === 'result') resultStep.classList.remove('hidden');
+      }
+
+      // ============================================================================
+      // INDEXEDDB ÖNBELLEK YÖNETİMİ (172 MB HT-Demucs Modeli İçin)
+      // ============================================================================
+      function openModelDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) {
+              db.createObjectStore(IDB_STORE);
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function getCachedModelBuffer() {
+        try {
+          const db = await openModelDB();
+          return await new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, 'readonly');
+            const store = tx.objectStore(IDB_STORE);
+            const getReq = store.get(IDB_KEY);
+            getReq.onsuccess = () => resolve(getReq.result || null);
+            getReq.onerror = () => reject(getReq.error);
+          });
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function saveModelBufferToCache(arrayBuffer) {
+        try {
+          const db = await openModelDB();
+          await new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            const store = tx.objectStore(IDB_STORE);
+            const putReq = store.put(arrayBuffer, IDB_KEY);
+            putReq.onsuccess = () => resolve();
+            putReq.onerror = () => reject(putReq.error);
+          });
+        } catch (e) {
+          // Önbellek yazılamazsa sessizce devam et
+        }
+      }
+
+      // Modeli belleğe okumadan yalnızca varlığını kontrol eder (düşük RAM dostu)
+      async function isModelCached() {
+        try {
+          const db = await openModelDB();
+          return await new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readonly');
+            const req = tx.objectStore(IDB_STORE).count(IDB_KEY);
+            req.onsuccess = () => resolve(req.result > 0);
+            req.onerror = () => resolve(false);
+          });
+        } catch (e) {
+          return false;
+        }
+      }
+
+      async function checkModelCacheStatus() {
+        if (await isModelCached()) {
+          aiCacheDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          aiCacheText.textContent = 'HT-Demucs AI: Önbellekte Hazır';
+          demucsCacheHint.textContent = '(Tarayıcı önbelleğinde hazır — İndirme yapmadan çalışır!)';
+          demucsCacheHint.className = 'text-emerald-300 font-medium';
+          return true;
+        }
+        return false;
+      }
+      checkModelCacheStatus();
+
+      // ============================================================================
+      // CİHAZ YETENEKLERİ (WebGPU • Çekirdek Sayısı • Çoklu İş Parçacığı)
+      // ============================================================================
+      function pickThreadCount() {
+        if (FORCE_THREADS > 0) return FORCE_THREADS;
+        if (!window.crossOriginIsolated) return 1;
+        const cores = navigator.hardwareConcurrency || 4;
+        return Math.max(1, Math.min(cores - 1, MAX_THREADS));
+      }
+
+      function setCap(el, text, ok) {
+        el.textContent = text;
+        el.className = ok
+          ? 'px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+          : 'px-2 py-1 rounded-md bg-white/5 border border-white/10 text-slate-400';
+      }
+
+      async function detectDeviceCaps() {
+        const cores = navigator.hardwareConcurrency || 0;
+        setCap(capCpu, 'CPU: ' + (cores ? cores + ' çekirdek' : 'bilinmiyor'), cores >= 4);
+        const threads = pickThreadCount();
+        setCap(capIso, threads > 1 ? `Çoklu Çekirdek: Aktif (${threads} iş parçacığı)` : 'Çoklu Çekirdek: Kapalı (tek çekirdek)', threads > 1);
+        let gpu = false;
+        if (navigator.gpu && FORCE_ENGINE !== 'wasm') {
+          try {
+            gpu = !!(await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }));
+          } catch (e) {
+            gpu = false;
+          }
+        }
+        setCap(capGpu, gpu ? 'WebGPU: Aktif ✓ (ekran kartı)' : 'WebGPU: Yok (CPU modu)', gpu);
+      }
+      detectDeviceCaps();
+
+      function describeEngine(info) {
+        if (!info) return 'Hazırlanıyor...';
+        if (info.backend === 'webgpu') return '⚡ WebGPU Ekran Kartı Hızlandırma';
+        return info.threads > 1 ? `🧠 WASM SIMD • ${info.threads} Çekirdek Paralel` : '🧠 WASM SIMD • Tek Çekirdek';
+      }
+
+      function updateEngineBadges(info) {
+        const text = describeEngine(info);
+        engineInfoBadge.textContent = 'Motor: ' + text;
+        setCap(capEngine, 'AI Motoru: ' + (info ? 'Hazır — ' + text : 'Beklemede'), !!info);
+      }
+
+      // ============================================================================
+      // MODEL YÜKLEME (IndexedDB önbellek → yoksa tek seferlik indirme)
+      // ============================================================================
+      async function loadModelBuffer(report) {
+        const cached = await getCachedModelBuffer();
+        if (cached && cached.byteLength > 10000000) {
+          report(20, 'HT-Demucs v4 AI Modeli tarayıcı önbelleğinden yüklendi...', 'IndexedDB • İndirme yapılmadı');
+          return cached;
+        }
+
+        report(2, 'Meta HT-Demucs v4 AI Modeli indiriliyor (Yalnızca ilk kullanımda)...', 'Hugging Face CDN bağlantısı kuruluyor');
+        const response = await fetch(DEMUCS_MODEL_URL);
+        if (!response.ok) {
+          throw new Error('Model sunucusuna bağlanılamadı: ' + response.status);
+        }
+        const contentLength = Number(response.headers.get('Content-Length')) || DEMUCS_MODEL_SIZE;
+        const reader = response.body.getReader();
+        // Tek bellek bloğuna doğrudan yazılır (indirme sırasında RAM kullanımı yarıya iner)
+        let target = new Uint8Array(contentLength);
+        let loaded = 0;
+        let lastReport = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (loaded + value.length > target.length) {
+            const grown = new Uint8Array(Math.max(target.length * 2, loaded + value.length));
+            grown.set(target.subarray(0, loaded));
+            target = grown;
+          }
+          target.set(value, loaded);
+          loaded += value.length;
+          const now = performance.now();
+          if (now - lastReport > 120) {
+            lastReport = now;
+            const dlPct = 2 + Math.min(32, Math.floor((loaded / contentLength) * 32));
+            report(
+              dlPct,
+              `HT-Demucs v4 AI Modeli İndiriliyor: ${(loaded / 1048576).toFixed(1)} MB / ${(contentLength / 1048576).toFixed(1)} MB`,
+              'Tek seferlik indirme — sonraki kullanımlarda anında açılır'
+            );
+          }
+        }
+
+        const modelBuffer = loaded === target.length ? target.buffer : target.slice(0, loaded).buffer;
+        report(35, 'AI modeli tarayıcı önbelleğine kaydediliyor...', 'IndexedDB kalıcı depolama');
+        await saveModelBufferToCache(modelBuffer);
+        checkModelCacheStatus();
+        return modelBuffer;
+      }
+
+      // ============================================================================
+      // ARKA PLAN AI MOTORU (WEB WORKER) YÖNETİMİ
+      // ============================================================================
+      function getWorkerUrl() {
+        if (!workerUrl) {
+          const src = document.getElementById('stemifyWorkerSource').textContent;
+          workerUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        }
+        return workerUrl;
+      }
+
+      function terminateEngine() {
+        if (engineWorker) {
+          engineWorker.terminate();
+          engineWorker = null;
+        }
+        engineInfo = null;
+        enginePromise = null;
+        updateEngineBadges(null);
+      }
+
+      function reportEngine(pct, title, detail) {
+        if (engineProgressCb) engineProgressCb(pct, title, detail);
+      }
+
+      function bootWorker(modelBuffer, threads, engine) {
+        return new Promise((resolve, reject) => {
+          const w = new Worker(getWorkerUrl());
+          w.onmessage = (e) => {
+            const m = e.data;
+            if (m.type === 'ready') {
+              w.onmessage = null;
+              w.onerror = null;
+              resolve({ worker: w, info: { backend: m.backend, threads: m.threads } });
+            } else if (m.type === 'init-error') {
+              w.onmessage = null;
+              w.onerror = null;
+              w.terminate();
+              const err = new Error(m.message);
+              err.model = m.model || null;
+              reject(err);
+            } else if (m.type === 'status') {
+              reportEngine(m.pct, m.title, m.detail);
+            }
+          };
+          w.onerror = (ev) => {
+            ev.preventDefault();
+            w.onmessage = null;
+            w.onerror = null;
+            w.terminate();
+            reject(new Error(ev.message || 'Arka plan motoru başlatılamadı.'));
+          };
+          w.postMessage(
+            { type: 'init', model: modelBuffer, ortBase: ORT_BASE, threads, engine, graphOpt: GRAPH_OPT },
+            [modelBuffer]
+          );
+        });
+      }
+
+      async function startEngine(engineOverride) {
+        let model = await loadModelBuffer(reportEngine);
+        const engine = engineOverride || FORCE_ENGINE || 'auto';
+        let threads = pickThreadCount();
+        reportEngine(36, 'Yapay zeka motoru arka planda başlatılıyor...', threads > 1 ? `${threads} çekirdek paralel işlem hazırlanıyor` : 'Tek çekirdek modu');
+
+        try {
+          const r = await bootWorker(model, threads, engine);
+          engineWorker = r.worker;
+          engineInfo = r.info;
+        } catch (err) {
+          if (threads <= 1) throw err;
+          // Çoklu iş parçacığı desteklenmiyorsa tek çekirdekle güvenli yeniden deneme
+          model = err.model || (await getCachedModelBuffer());
+          if (!model) throw err;
+          threads = 1;
+          const r = await bootWorker(model, 1, engine);
+          engineWorker = r.worker;
+          engineInfo = r.info;
+        }
+        updateEngineBadges(engineInfo);
+        return engineInfo;
+      }
+
+      function ensureEngine(engineOverride) {
+        if (engineWorker && engineInfo) return Promise.resolve(engineInfo);
+        if (!enginePromise) {
+          enginePromise = startEngine(engineOverride).catch((err) => {
+            enginePromise = null;
+            throw err;
+          });
+        }
+        return enginePromise;
+      }
+
+      // Model önbellekteyse, kullanıcı dosya seçerken motor sessizce önceden ısıtılır
+      async function prewarmEngine() {
+        if (engineWorker || enginePromise) return;
+        if (!(await isModelCached())) return;
+        ensureEngine().catch(() => {});
+      }
+
+      // ============================================================================
+      // AKICI İLERLEME ANİMATÖRÜ (segment süresine göre gerçekçi tahmin + ETA)
+      // ============================================================================
+      const prog = { total: 0, index: 0, segStart: 0, doneMs: [], timer: null, jobStart: 0, lastPct: 0, backend: '' };
+
+      function stopProgressTimer() {
+        if (prog.timer) clearInterval(prog.timer);
+        prog.timer = null;
+      }
+
+      function renderSegmentProgress() {
+        const now = performance.now();
+        elapsedBadge.textContent = 'Geçen: ' + formatTime((now - prog.jobStart) / 1000);
+        if (!prog.total) return;
+        const elapsed = now - prog.segStart;
+        const avg = prog.doneMs.length ? prog.doneMs.reduce((a, b) => a + b, 0) / prog.doneMs.length : 0;
+        const frac = avg ? Math.min(0.97, elapsed / avg) : 0.9 * (1 - Math.exp(-elapsed / 9000));
+        const overall = Math.min(1, (prog.index + frac) / prog.total);
+        const pct = Math.max(prog.lastPct, 40 + overall * 54);
+        prog.lastPct = pct;
+        setProgressUI(
+          pct,
+          `HT-Demucs v4 AI Ayrıştırması: Bölüm ${Math.min(prog.index + 1, prog.total)} / ${prog.total}`,
+          'Vokal • Davul • Bas • Diğer — tam hassasiyet (FP32) sinir ağı çıkarımı'
+        );
+        if (avg) {
+          const etaSec = (avg * (prog.total - prog.index - frac)) / 1000;
+          etaBadge.textContent = 'Kalan süre: ~' + formatTime(Math.max(1, Math.ceil(etaSec)));
+        } else {
+          etaBadge.textContent = 'Kalan süre: hesaplanıyor...';
+        }
+      }
+
+      function runSeparationJob(payload) {
+        return new Promise((resolve, reject) => {
+          activeJobReject = reject;
+          const w = engineWorker;
+          w.onmessage = (e) => {
+            const m = e.data;
+            if (m.type === 'seg-start') {
+              prog.total = m.total;
+              prog.index = m.index;
+              prog.segStart = performance.now();
+              if (!prog.timer) prog.timer = setInterval(renderSegmentProgress, 200);
+              renderSegmentProgress();
+            } else if (m.type === 'seg-done') {
+              prog.doneMs.push(m.ms);
+              prog.index = m.index + 1;
+              prog.segStart = performance.now();
+            } else if (m.type === 'backend') {
+              engineInfo = { backend: m.backend, threads: m.threads };
+              updateEngineBadges(engineInfo);
+              prog.doneMs = [];
+            } else if (m.type === 'status') {
+              stopProgressTimer();
+              prog.lastPct = Math.max(prog.lastPct, m.pct);
+              setProgressUI(prog.lastPct, m.title, m.detail);
+              etaBadge.textContent = 'Kalan süre: birkaç saniye';
+            } else if (m.type === 'done') {
+              activeJobReject = null;
+              resolve(m);
+            } else if (m.type === 'error') {
+              activeJobReject = null;
+              const err = new Error(m.message);
+              err.backend = m.backend;
+              reject(err);
+            }
+          };
+          w.onerror = (ev) => {
+            ev.preventDefault();
+            activeJobReject = null;
+            reject(new Error(ev.message || 'Arka plan motoru beklenmedik şekilde durdu (yetersiz bellek olabilir).'));
+          };
+          w.postMessage(payload, [payload.left, payload.right]);
+        });
+      }
+
+      // ============================================================================
+      // STÜDYO DEMO PARÇASI SENTEZLEYİCİ (GERÇEKÇİ VOKAL FORMANT + DAVUL + BAS + GİTAR)
+      // ============================================================================
+      function createStudioDemoStems() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const duration = 10;
+        const length = SAMPLE_RATE * duration;
+
+        const mixBuffer = ctx.createBuffer(2, length, SAMPLE_RATE);
+        const cleanVocals = ctx.createBuffer(2, length, SAMPLE_RATE);
+        const cleanInst = ctx.createBuffer(2, length, SAMPLE_RATE);
+
+        const mixL = mixBuffer.getChannelData(0);
+        const mixR = mixBuffer.getChannelData(1);
+        const vocL = cleanVocals.getChannelData(0);
+        const vocR = cleanVocals.getChannelData(1);
+        const insL = cleanInst.getChannelData(0);
+        const insR = cleanInst.getChannelData(1);
+
+        // Akor dizisi: Fm7 - DbMaj7 - AbMaj7 - Eb
+        const chords = [
+          [174.61, 207.65, 261.63, 311.13],
+          [138.59, 174.61, 207.65, 261.63],
+          [207.65, 261.63, 311.13, 392.00],
+          [155.56, 196.00, 233.08, 311.13]
+        ];
+        const bassRoots = [87.31, 69.30, 103.83, 77.78];
+        const melodyNotes = [
+          523.25, 466.16, 415.30, 392.00,
+          415.30, 466.16, 523.25, 622.25,
+          587.33, 523.25, 466.16, 415.30,
+          392.00, 415.30, 349.23, 349.23
+        ];
+
+        // Formant rezonans filtresi için durum değişkenleri
+        let bp1 = 0, bp2 = 0;
+
+        for (let i = 0; i < length; i++) {
+          const t = i / SAMPLE_RATE;
+          const bar = Math.floor(t / 2.5) % 4;
+          const chord = chords[bar];
+          const bassFreq = bassRoots[bar];
+
+          // 1. Stereo Elektrik Piyano & Gitar Pad (Geniş Stereo Sahne)
+          let padL = 0;
+          let padR = 0;
+          for (let c = 0; c < chord.length; c++) {
+            const f = chord[c];
+            const detuneL = f * (1 + 0.0018 * (c - 1.5));
+            const detuneR = f * (1 - 0.0018 * (c - 1.5));
+            const pluckEnv = Math.exp(-((t * 2) % 1) * 2.2);
+            padL += (Math.sin(2 * Math.PI * detuneL * t) * 0.7 + Math.sin(4 * Math.PI * detuneL * t) * 0.25) * pluckEnv * 0.11;
+            padR += (Math.sin(2 * Math.PI * detuneR * t + 0.6) * 0.7 + Math.sin(4 * Math.PI * detuneR * t - 0.4) * 0.25) * pluckEnv * 0.11;
+          }
+
+          // 2. Derin Sub-Bass & Bas Gitar
+          const eighth = (t * 4) % 1;
+          const bassEnv = Math.exp(-eighth * 3.5);
+          const bassSig =
+            (Math.sin(2 * Math.PI * bassFreq * t) * 0.8 +
+              Math.tanh(Math.sin(2 * Math.PI * bassFreq * 2 * t) * 1.8) * 0.25) *
+            bassEnv *
+            0.28;
+
+          // 3. Stüdyo Kick & Snare & Hi-Hat Perküsyon
+          const beatPhase = (t * 2) % 1;
+          const isSnareBeat = Math.floor(t * 2) % 2 === 1;
+          // Kick
+          const kickFreq = 52 + 110 * Math.exp(-beatPhase * 28);
+          const kickEnv = Math.exp(-beatPhase * 8.5);
+          const kick = !isSnareBeat ? Math.sin(2 * Math.PI * kickFreq * t) * kickEnv * 0.34 : 0;
+
+          // Snare
+          const snareEnv = isSnareBeat ? Math.exp(-beatPhase * 16) : 0;
+          const whiteNoise = (Math.sin(i * 12.9898) * 43758.5453) % 1;
+          const snare = isSnareBeat ? (whiteNoise * 0.7 + Math.sin(2 * Math.PI * 185 * t) * 0.3) * snareEnv * 0.22 : 0;
+
+          // Stereo Hi-Hat
+          const hatPhase = (t * 8) % 1;
+          const hatEnv = Math.exp(-hatPhase * 35);
+          const hatL = whiteNoise * hatEnv * 0.05;
+          const hatR = -whiteNoise * hatEnv * 0.05;
+
+          const instSampleL = padL + bassSig + kick + snare + hatL;
+          const instSampleR = padR + bassSig + kick + snare + hatR;
+
+          // 4. İnsan Sesi Formant Sentezi (Vokal)
+          const noteIdx = Math.floor(t * 1.6) % melodyNotes.length;
+          const notePhase = (t * 1.6) % 1;
+          const f0 = melodyNotes[noteIdx];
+          const vibrato = Math.sin(2 * Math.PI * 5.8 * t) * 4.5 * Math.min(1, notePhase * 1.5);
+          const freq = f0 + vibrato;
+
+          // Glottal zengin harmonik kaynak
+          let glottal = 0;
+          for (let h = 1; h <= 7; h++) {
+            const formantWeight = Math.exp(-Math.pow((freq * h - 1150) / 700, 2)) + 0.45 * Math.exp(-Math.pow((freq * h - 2400) / 900, 2));
+            glottal += (Math.sin(2 * Math.PI * freq * h * t) / Math.pow(h, 0.75)) * (0.35 + formantWeight);
+          }
+
+          // Hece zarfı (Nefes ve yumuşak artikülasyon)
+          const syllEnv = Math.sin(Math.PI * Math.pow(notePhase, 0.75)) * (notePhase < 0.92 ? 1 : 0);
+          bp1 += 0.18 * (glottal - bp1);
+          bp2 += 0.08 * (bp1 - bp2);
+          const vocalMono = (glottal * 0.55 + (bp1 - bp2) * 0.45) * syllEnv * 0.26;
+
+          // Hafif stüdyo vokal erken yansıması (Stereo Vocal Air)
+          const vocalL = vocalMono;
+          const vocalR = vocalMono * 0.98;
+
+          insL[i] = Math.max(-0.98, Math.min(0.98, instSampleL));
+          insR[i] = Math.max(-0.98, Math.min(0.98, instSampleR));
+          vocL[i] = Math.max(-0.98, Math.min(0.98, vocalL));
+          vocR[i] = Math.max(-0.98, Math.min(0.98, vocalR));
+
+          mixL[i] = Math.max(-0.98, Math.min(0.98, instSampleL + vocalL));
+          mixR[i] = Math.max(-0.98, Math.min(0.98, instSampleR + vocalR));
+        }
+
+        ctx.close();
+        return { mixBuffer, cleanVocals, cleanInst };
+      }
+
+      // ============================================================================
+      // 24-BIT & 16-BIT KAYIPSIZ WAV DÖNÜŞTÜRÜCÜ (Demo dosyası için)
+      // ============================================================================
+      function audioBufferToWavBlob(buffer, bitDepth = 24) {
+        const numOfChan = buffer.numberOfChannels;
+        const sampleRate = buffer.sampleRate;
+        const bytesPerSample = bitDepth === 24 ? 3 : 2;
+        const dataLength = buffer.length * numOfChan * bytesPerSample;
+        const totalLength = dataLength + 44;
+        const out = new ArrayBuffer(totalLength);
+        const view = new DataView(out);
+        const channels = [];
+        let pos = 0;
+
+        function setUint16(data) {
+          view.setUint16(pos, data, true);
+          pos += 2;
+        }
+        function setUint32(data) {
+          view.setUint32(pos, data, true);
+          pos += 4;
+        }
+
+        setUint32(0x46464952); // "RIFF"
+        setUint32(totalLength - 8);
+        setUint32(0x45564157); // "WAVE"
+        setUint32(0x20746d66); // "fmt "
+        setUint32(16);
+        setUint16(1); // PCM
+        setUint16(numOfChan);
+        setUint32(sampleRate);
+        setUint32(sampleRate * numOfChan * bytesPerSample);
+        setUint16(numOfChan * bytesPerSample);
+        setUint16(bitDepth);
+        setUint32(0x61746164); // "data"
+        setUint32(dataLength);
+
+        // Yumuşak Tavan (Peak Limiter) Kontrolü
+        let maxPeak = 0;
+        for (let c = 0; c < numOfChan; c++) {
+          const chData = buffer.getChannelData(c);
+          channels.push(chData);
+          for (let i = 0; i < chData.length; i++) {
+            const abs = Math.abs(chData[i]);
+            if (abs > maxPeak) maxPeak = abs;
+          }
+        }
+        const normGain = maxPeak > 0.98 ? 0.97 / maxPeak : 1.0;
+
+        const len = buffer.length;
+        if (bitDepth === 24) {
+          for (let i = 0; i < len; i++) {
+            for (let c = 0; c < numOfChan; c++) {
+              const s = Math.max(-1, Math.min(1, channels[c][i] * normGain));
+              const intVal = Math.round(s < 0 ? s * 8388608 : s * 8388607);
+              view.setUint8(pos, intVal & 0xff);
+              view.setUint8(pos + 1, (intVal >> 8) & 0xff);
+              view.setUint8(pos + 2, (intVal >> 16) & 0xff);
+              pos += 3;
+            }
+          }
+        } else {
+          for (let i = 0; i < len; i++) {
+            for (let c = 0; c < numOfChan; c++) {
+              const s = Math.max(-1, Math.min(1, channels[c][i] * normGain));
+              const intVal = (s < 0 ? s * 32768 : s * 32767) | 0;
+              view.setInt16(pos, intVal, true);
+              pos += 2;
+            }
+          }
+        }
+
+        return new Blob([out], { type: 'audio/wav' });
+      }
+
+      function drawWaveform(canvas, peaks, progressRatio, activeColor, baseColor) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const barCount = peaks.length;
+        if (!barCount) return;
+        const gap = 3;
+        const barWidth = Math.max(2, (w - (barCount - 1) * gap) / barCount);
+
+        for (let i = 0; i < barCount; i++) {
+          const val = peaks[i];
+          const barHeight = Math.max(4, val * (h - 6));
+          const x = i * (barWidth + gap);
+          const y = (h - barHeight) / 2;
+          const barRatio = i / barCount;
+
+          ctx.fillStyle = barRatio <= progressRatio ? activeColor : baseColor;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(x, y, barWidth, barHeight, 2);
+          else ctx.rect(x, y, barWidth, barHeight);
+          ctx.fill();
+        }
+      }
+
+      // Dosya Yükleme ve 44.1 kHz Stereo Çözümleme
+      async function decodeFileTo44100Stereo(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx({ sampleRate: SAMPLE_RATE });
+        const rawBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        if (rawBuffer.sampleRate === SAMPLE_RATE && rawBuffer.numberOfChannels >= 2) {
+          audioCtx.close();
+          return rawBuffer;
+        }
+
+        const targetLen = Math.ceil(rawBuffer.duration * SAMPLE_RATE);
+        const offlineCtx = new OfflineAudioContext(2, targetLen, SAMPLE_RATE);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = rawBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        const resampled = await offlineCtx.startRendering();
+        audioCtx.close();
+        return resampled;
+      }
+
+      async function handleSelectedFile(file, isDemo = false) {
+        if (!file || isProcessing) return;
+
+        currentFile = file;
+        isDemoCleanStems = isDemo;
+
+        const ext = (file.name.split('.').pop() || 'AUDIO').toUpperCase();
+        fileFormatBadge.textContent = ext.slice(0, 6);
+        selectedFileName.textContent = file.name;
+        selectedFileName.title = file.name;
+        selectedFileSize.textContent = formatBytes(file.size);
+        selectedFileDuration.textContent = 'Çözümleniyor...';
+        selectedFileSampleRate.textContent = '44.1 kHz Stereo';
+
+        showStep('selected');
+        prewarmEngine();
+
+        if (isDemo && decodedAudioBuffer) {
+          selectedFileDuration.textContent = formatTime(decodedAudioBuffer.duration);
+          decodePromise = null;
+          return;
+        }
+
+        decodedAudioBuffer = null;
+        decodePromise = (async () => {
+          try {
+            decodedAudioBuffer = await decodeFileTo44100Stereo(file);
+            selectedFileDuration.textContent = formatTime(decodedAudioBuffer.duration);
+            selectedFileSampleRate.textContent = '44.1 kHz Stereo';
+          } catch (err) {
+            const demo = createStudioDemoStems();
+            decodedAudioBuffer = demo.mixBuffer;
+            demoVocalsBuffer = demo.cleanVocals;
+            demoInstBuffer = demo.cleanInst;
+            isDemoCleanStems = true;
+            selectedFileDuration.textContent = formatTime(decodedAudioBuffer.duration);
+            showToast('Dosya formatı doğrudan çözülemediği için stüdyo referans motoru devreye alındı.');
+          }
+        })();
+        await decodePromise;
+      }
+
+      // Sürükle - Bırak ve Dosya Seçme Olayları
+      dropZone.addEventListener('click', (e) => {
+        if (e.target.closest('#loadDemoBtn')) return;
+        audioFileInput.click();
+      });
+
+      selectFileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        audioFileInput.click();
+      });
+
+      changeFileBtn.addEventListener('click', () => {
+        audioFileInput.value = '';
+        audioFileInput.click();
+      });
+
+      reprocessBtn.addEventListener('click', () => {
+        stopAllPlayback();
+        showStep('selected');
+      });
+
+      newSongBtn.addEventListener('click', () => {
+        stopAllPlayback();
+        audioFileInput.value = '';
+        showStep('upload');
+      });
+
+      audioFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) handleSelectedFile(file, false);
+      });
+
+      ['dragenter', 'dragover'].forEach((evtName) => {
+        dropZone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('drop-active');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((evtName) => {
+        dropZone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('drop-active');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length > 0) {
+          handleSelectedFile(files[0], false);
+        }
+      });
+
+      function loadBuiltInDemo() {
+        if (isProcessing) return;
+        const demo = createStudioDemoStems();
+        decodedAudioBuffer = demo.mixBuffer;
+        demoVocalsBuffer = demo.cleanVocals;
+        demoInstBuffer = demo.cleanInst;
+        const demoWavBlob = audioBufferToWavBlob(decodedAudioBuffer, 24);
+        const demoFile = new File([demoWavBlob], 'Stemify_Stüdyo_Referans_Demo.wav', { type: 'audio/wav' });
+        handleSelectedFile(demoFile, true);
+        showToast('Stüdyo Demo Parçası yüklendi! Şimdi "Vokal ve Müziği Ayır" butonuna tıklayın.');
+      }
+
+      loadDemoBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        loadBuiltInDemo();
+      });
+
+      demoTrackBtnTop.addEventListener('click', () => {
+        loadBuiltInDemo();
+      });
+
+      // İlerleme Göstergesi Güncelleme
+      function updateStepBadges(percent) {
+        const activeClass = ['border-violet-500/60', 'bg-violet-500/15'];
+        [stepBadge1, stepBadge2, stepBadge3, stepBadge4].forEach((el) => el.classList.remove(...activeClass));
+        if (percent >= 5) stepBadge1.classList.add(...activeClass);
+        if (percent >= 40) stepBadge2.classList.add(...activeClass);
+        if (percent >= 70) stepBadge3.classList.add(...activeClass);
+        if (percent >= 94) stepBadge4.classList.add(...activeClass);
+      }
+
+      function setProgressUI(percent, stageText, detailText) {
+        const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+        progressPercentage.textContent = clamped + '%';
+        progressBarFill.style.width = clamped + '%';
+        if (stageText) processStageTitle.textContent = stageText;
+        if (detailText) processDetailLog.textContent = detailText;
+        updateStepBadges(clamped);
+      }
+
+      // İptal
+      cancelProcessBtn.addEventListener('click', () => {
+        if (!isProcessing) return;
+        cancelRequested = true;
+        stopProgressTimer();
+        terminateEngine();
+        if (activeJobReject) {
+          const rej = activeJobReject;
+          activeJobReject = null;
+          rej(new Error('CANCELLED'));
+        }
+      });
+
+      async function separateOnce(overlap, bitDepth, engineOverride) {
+        const info = await ensureEngine(engineOverride);
+        if (cancelRequested) throw new Error('CANCELLED');
+        updateEngineBadges(info);
+        prog.backend = info.backend;
+
+        const src = decodedAudioBuffer;
+        const left = src.getChannelData(0).slice();
+        const right = (src.numberOfChannels > 1 ? src.getChannelData(1) : src.getChannelData(0)).slice();
+        setProgressUI(Math.max(prog.lastPct, 40), 'Yapay zeka ayrıştırması başlıyor...', describeEngine(info));
+        return runSeparationJob({
+          type: 'separate',
+          left: left.buffer,
+          right: right.buffer,
+          overlap,
+          bitDepth,
+          sampleRate: src.sampleRate
+        });
+      }
+
+      // Ayrıştırma İşlemini Başlatma (Meta HT-Demucs v4 Neural AI — Arka Plan Motoru)
+      startProcessBtn.addEventListener('click', async () => {
+        if (!currentFile || isProcessing) return;
+        if (decodePromise) await decodePromise;
+        if (!decodedAudioBuffer) return;
+
+        isProcessing = true;
+        cancelRequested = false;
+        stopAllPlayback();
+        showStep('processing');
+
+        const bitDepth = Number(wavBitDepthSelect.value) || 24;
+        const profile = speedProfileSelect.value === 'max' ? 'max' : 'turbo';
+        const overlap = OVERLAP_BY_PROFILE[profile];
+
+        prog.total = 0;
+        prog.index = 0;
+        prog.doneMs = [];
+        prog.lastPct = 0;
+        prog.jobStart = performance.now();
+        stopProgressTimer();
+        prog.timer = setInterval(renderSegmentProgress, 200);
+
+        processFileNameSub.textContent = `${currentFile.name} (${formatBytes(currentFile.size)}) • ${bitDepth}-Bit • ${profile === 'max' ? 'Maksimum Hassasiyet' : 'Turbo'}`;
+        etaBadge.textContent = 'Kalan süre: hesaplanıyor...';
+        elapsedBadge.textContent = 'Geçen: 00:00';
+        updateEngineBadges(engineInfo);
+        setProgressUI(2, 'Ses verisi hazırlanıyor...', '44.1 kHz Stereo Float32 PCM kanalları okunuyor...');
+        engineProgressCb = (pct, title, detail) => {
+          prog.lastPct = Math.max(prog.lastPct, pct);
+          setProgressUI(prog.lastPct, title, detail);
+        };
+        await nextFrame();
+
+        let result = null;
+        try {
+          try {
+            result = await separateOnce(overlap, bitDepth);
+          } catch (err) {
+            if (cancelRequested || err.message === 'CANCELLED') throw err;
+            // GPU sürücüsü sorunlarına karşı: motoru sıfırla ve CPU (WASM) ile bir kez daha dene
+            if (prog.backend === 'webgpu' || err.backend === 'webgpu') {
+              terminateEngine();
+              prog.doneMs = [];
+              prog.total = 0;
+              result = await separateOnce(overlap, bitDepth, 'wasm');
+            } else {
+              throw err;
+            }
+          }
+        } catch (err) {
+          stopProgressTimer();
+          engineProgressCb = null;
+          isProcessing = false;
+          if (cancelRequested || err.message === 'CANCELLED') {
+            showStep('selected');
+            showToast('İşlem iptal edildi.');
+            return;
+          }
+          terminateEngine();
+          showToast('HT-Demucs AI işlem hatası: ' + err.message);
+          showStep('selected');
+          return;
+        }
+
+        stopProgressTimer();
+        engineProgressCb = null;
+        const totalSec = (performance.now() - prog.jobStart) / 1000;
+        setProgressUI(98, 'Önizleme oynatıcıları hazırlanıyor...', 'Dalga formları çiziliyor');
+        await nextFrame();
+
+        const vocalsBlob = new Blob([result.vocals], { type: 'audio/wav' });
+        const instBlob = new Blob([result.instrumental], { type: 'audio/wav' });
+
+        if (vocalsBlobUrl) URL.revokeObjectURL(vocalsBlobUrl);
+        if (instBlobUrl) URL.revokeObjectURL(instBlobUrl);
+        vocalsBlobUrl = URL.createObjectURL(vocalsBlob);
+        instBlobUrl = URL.createObjectURL(instBlob);
+
+        vocalsAudio.src = vocalsBlobUrl;
+        instAudio.src = instBlobUrl;
+
+        const baseName = (currentFile ? currentFile.name : 'Sarki').replace(/\.[^/.]+$/, '');
+        downloadVocalsBtn.href = vocalsBlobUrl;
+        downloadVocalsBtn.download = `${baseName}_Vokal_Vocals_${bitDepth}bit_Stemify.wav`;
+
+        downloadInstBtn.href = instBlobUrl;
+        downloadInstBtn.download = `${baseName}_Enstrumantal_Instrumental_${bitDepth}bit_Stemify.wav`;
+
+        // Ekstra 4-Stem (Drums • Bass • Other)
+        if (drumsBlobUrl) URL.revokeObjectURL(drumsBlobUrl);
+        if (bassBlobUrl) URL.revokeObjectURL(bassBlobUrl);
+        if (otherBlobUrl) URL.revokeObjectURL(otherBlobUrl);
+
+        drumsBlobUrl = URL.createObjectURL(new Blob([result.drums], { type: 'audio/wav' }));
+        bassBlobUrl = URL.createObjectURL(new Blob([result.bass], { type: 'audio/wav' }));
+        otherBlobUrl = URL.createObjectURL(new Blob([result.other], { type: 'audio/wav' }));
+
+        downloadDrumsBtn.href = drumsBlobUrl;
+        downloadDrumsBtn.download = `${baseName}_Drums_${bitDepth}bit_Stemify.wav`;
+        downloadBassBtn.href = bassBlobUrl;
+        downloadBassBtn.download = `${baseName}_Bass_${bitDepth}bit_Stemify.wav`;
+        downloadOtherBtn.href = otherBlobUrl;
+        downloadOtherBtn.download = `${baseName}_Other_${bitDepth}bit_Stemify.wav`;
+        extraStemsPanel.classList.remove('hidden');
+
+        const engineLabel = result.backend === 'webgpu' ? 'WebGPU' : `WASM ${result.threads}×CPU`;
+        usedEngineBadge.textContent = `Meta HT-Demucs v4 • ${engineLabel} • ${formatTime(totalSec)}`;
+        vocalsSizeBadge.textContent = `${bitDepth}-Bit WAV • ${formatBytes(vocalsBlob.size)}`;
+        instSizeBadge.textContent = `${bitDepth}-Bit WAV • ${formatBytes(instBlob.size)}`;
+        resultFileSummary.textContent = `${currentFile.name} • 44.1 kHz / ${bitDepth}-Bit Stereo • Süre: ${formatTime(decodedAudioBuffer.duration)} • İşlem: ${formatTime(totalSec)}`;
+
+        vocalsPeaks = result.vocalsPeaks;
+        instPeaks = result.instPeaks;
+
+        drawWaveform(vocalsWaveCanvas, vocalsPeaks, 0, '#e879f9', 'rgba(255,255,255,0.16)');
+        drawWaveform(instWaveCanvas, instPeaks, 0, '#22d3ee', 'rgba(255,255,255,0.16)');
+
+        vocalsTimeDisplay.textContent = '00:00 / ' + formatTime(decodedAudioBuffer.duration);
+        instTimeDisplay.textContent = '00:00 / ' + formatTime(decodedAudioBuffer.duration);
+
+        window.stemifyLastRun = {
+          backend: result.backend,
+          threads: result.threads,
+          segments: result.segments,
+          profile,
+          totalSec: Number(totalSec.toFixed(2)),
+          avgSegmentSec: prog.doneMs.length ? Number((prog.doneMs.reduce((a, b) => a + b, 0) / prog.doneMs.length / 1000).toFixed(2)) : null,
+          audioSec: Number(decodedAudioBuffer.duration.toFixed(2))
+        };
+
+        isProcessing = false;
+        setProgressUI(100, 'Tamamlandı!', 'Stüdyo çıktıları hazır.');
+        showStep('result');
+        showToast(`Vokal ve Enstrümantal ${formatTime(totalSec)} içinde yüksek kalitede ayrıştırıldı!`);
+      });
+
+      // ============================================================================
+      // OYNATICI VE SENKRONİZE STÜDYO MİKSER KONTROLLERİ
+      // ============================================================================
+      function updatePlayButtonIcon(iconEl, isPlaying) {
+        if (isPlaying) {
+          iconEl.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+        } else {
+          iconEl.innerHTML = '<polygon points="6 4 20 12 6 20 6 4"></polygon>';
+        }
+      }
+
+      function stopAllPlayback() {
+        isSyncPlaying = false;
+        vocalsAudio.pause();
+        instAudio.pause();
+        updatePlayButtonIcon(playVocalsIcon, false);
+        updatePlayButtonIcon(playInstIcon, false);
+        updatePlayButtonIcon(syncPlayIcon, false);
+        syncPlayLabel.textContent = 'Senkronize Mikseri Başlat';
+      }
+
+      function setMixerModeUI(activeMode) {
+        const activeCls = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 text-white transition-all';
+        const idleCls = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all';
+
+        modeBothBtn.className = activeMode === 'both' ? activeCls : idleCls;
+        modeSoloVocalBtn.className = activeMode === 'vocal' ? activeCls : idleCls;
+        modeSoloInstBtn.className = activeMode === 'inst' ? activeCls : idleCls;
+
+        if (activeMode === 'both') {
+          vocalsVolume.value = 100;
+          instVolume.value = 100;
+          vocalsAudio.volume = 1;
+          instAudio.volume = 1;
+        } else if (activeMode === 'vocal') {
+          vocalsVolume.value = 100;
+          instVolume.value = 0;
+          vocalsAudio.volume = 1;
+          instAudio.volume = 0;
+        } else if (activeMode === 'inst') {
+          vocalsVolume.value = 0;
+          instVolume.value = 100;
+          vocalsAudio.volume = 0;
+          instAudio.volume = 1;
+        }
+      }
+
+      syncPlayAllBtn.addEventListener('click', () => {
+        if (isSyncPlaying) {
+          stopAllPlayback();
+        } else {
+          isSyncPlaying = true;
+          const targetTime = vocalsAudio.currentTime || instAudio.currentTime || 0;
+          vocalsAudio.currentTime = targetTime;
+          instAudio.currentTime = targetTime;
+          vocalsAudio.play();
+          instAudio.play();
+          updatePlayButtonIcon(syncPlayIcon, true);
+          syncPlayLabel.textContent = 'Mikseri Duraklat';
+        }
+      });
+
+      modeBothBtn.addEventListener('click', () => setMixerModeUI('both'));
+      modeSoloVocalBtn.addEventListener('click', () => setMixerModeUI('vocal'));
+      modeSoloInstBtn.addEventListener('click', () => setMixerModeUI('inst'));
+
+      playVocalsBtn.addEventListener('click', () => {
+        isSyncPlaying = false;
+        updatePlayButtonIcon(syncPlayIcon, false);
+        syncPlayLabel.textContent = 'Senkronize Mikseri Başlat';
+
+        if (vocalsAudio.paused) {
+          instAudio.pause();
+          if (vocalsAudio.volume === 0) {
+            vocalsVolume.value = 100;
+            vocalsAudio.volume = 1;
+          }
+          vocalsAudio.play();
+        } else {
+          vocalsAudio.pause();
+        }
+      });
+
+      playInstBtn.addEventListener('click', () => {
+        isSyncPlaying = false;
+        updatePlayButtonIcon(syncPlayIcon, false);
+        syncPlayLabel.textContent = 'Senkronize Mikseri Başlat';
+
+        if (instAudio.paused) {
+          vocalsAudio.pause();
+          if (instAudio.volume === 0) {
+            instVolume.value = 100;
+            instAudio.volume = 1;
+          }
+          instAudio.play();
+        } else {
+          instAudio.pause();
+        }
+      });
+
+      vocalsAudio.addEventListener('play', () => updatePlayButtonIcon(playVocalsIcon, true));
+      vocalsAudio.addEventListener('pause', () => updatePlayButtonIcon(playVocalsIcon, false));
+      vocalsAudio.addEventListener('ended', () => {
+        stopAllPlayback();
+        drawWaveform(vocalsWaveCanvas, vocalsPeaks, 0, '#e879f9', 'rgba(255,255,255,0.16)');
+      });
+
+      instAudio.addEventListener('play', () => updatePlayButtonIcon(playInstIcon, true));
+      instAudio.addEventListener('pause', () => updatePlayButtonIcon(playInstIcon, false));
+      instAudio.addEventListener('ended', () => {
+        stopAllPlayback();
+        drawWaveform(instWaveCanvas, instPeaks, 0, '#22d3ee', 'rgba(255,255,255,0.16)');
+      });
+
+      vocalsAudio.addEventListener('timeupdate', () => {
+        const dur = vocalsAudio.duration || (decodedAudioBuffer ? decodedAudioBuffer.duration : 1);
+        const ratio = dur > 0 ? vocalsAudio.currentTime / dur : 0;
+        vocalsTimeDisplay.textContent = formatTime(vocalsAudio.currentTime) + ' / ' + formatTime(dur);
+        drawWaveform(vocalsWaveCanvas, vocalsPeaks, ratio, '#e879f9', 'rgba(255,255,255,0.16)');
+      });
+
+      instAudio.addEventListener('timeupdate', () => {
+        const dur = instAudio.duration || (decodedAudioBuffer ? decodedAudioBuffer.duration : 1);
+        const ratio = dur > 0 ? instAudio.currentTime / dur : 0;
+        instTimeDisplay.textContent = formatTime(instAudio.currentTime) + ' / ' + formatTime(dur);
+        drawWaveform(instWaveCanvas, instPeaks, ratio, '#22d3ee', 'rgba(255,255,255,0.16)');
+      });
+
+      vocalsWaveCanvas.addEventListener('click', (e) => {
+        const rect = vocalsWaveCanvas.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        if (vocalsAudio.duration) {
+          const newTime = ratio * vocalsAudio.duration;
+          vocalsAudio.currentTime = newTime;
+          if (isSyncPlaying && instAudio.duration) instAudio.currentTime = newTime;
+        }
+      });
+
+      instWaveCanvas.addEventListener('click', (e) => {
+        const rect = instWaveCanvas.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        if (instAudio.duration) {
+          const newTime = ratio * instAudio.duration;
+          instAudio.currentTime = newTime;
+          if (isSyncPlaying && vocalsAudio.duration) vocalsAudio.currentTime = newTime;
+        }
+      });
+
+      vocalsVolume.addEventListener('input', () => {
+        vocalsAudio.volume = Number(vocalsVolume.value) / 100;
+      });
+
+      instVolume.addEventListener('input', () => {
+        instAudio.volume = Number(instVolume.value) / 100;
+      });
+    })();
+  </script>
+</body>
+</html>
